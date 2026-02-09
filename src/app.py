@@ -1,52 +1,255 @@
-from fastapi import FastAPI #type: ignore
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks #type: ignore
+from sqlalchemy.orm import Session
 from data.models import *
 from data.data_ingest import DataIngestCommand
 from data.tfl_client import TflClient
+from data.database import get_db, init_db, SessionLocal
+from data.mapper import ModelMapper
+from data import db_models
 import logging
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 app = FastAPI()
 tfl_client = TflClient()
 
+# Track ingestion status
+ingestion_status = {
+    "running": False,
+    "started_at": None,
+    "completed_at": None,
+    "status": "idle",
+    "message": None,
+    "error": None
+}
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+    logging.info("Database initialized")
+
 @app.get("/")
 async def root() -> Response:
     return Response(status="success", message="health is wealth")
 
-@app.get("/route/ingest")
-async def ingest_data() -> Response:
-    # Placeholder for data ingestion logic
-    return Response(status="success", message="Data ingested successfully")
+def run_ingestion_task():
+    """Background task for data ingestion"""
+    global ingestion_status
+    
+    db_session = SessionLocal()
+    try:
+        ingestion_status["running"] = True
+        ingestion_status["status"] = "running"
+        ingestion_status["started_at"] = datetime.now().isoformat()
+        ingestion_status["message"] = "Ingestion in progress..."
+        ingestion_status["error"] = None
+        
+        logging.info("Starting background ingestion task")
+        command = DataIngestCommand()
+        result = command.execute(db_session=db_session)
+        
+        ingestion_status["running"] = False
+        ingestion_status["status"] = "completed"
+        ingestion_status["completed_at"] = datetime.now().isoformat()
+        ingestion_status["message"] = result.message
+        
+        logging.info("Background ingestion task completed successfully")
+        
+    except Exception as e:
+        ingestion_status["running"] = False
+        ingestion_status["status"] = "failed"
+        ingestion_status["completed_at"] = datetime.now().isoformat()
+        ingestion_status["error"] = str(e)
+        ingestion_status["message"] = f"Ingestion failed: {str(e)}"
+        logging.error(f"Background ingestion task failed: {e}", exc_info=True)
+        
+    finally:
+        db_session.close()
+
+
+@app.post("/route/ingest")
+async def ingest_data(background_tasks: BackgroundTasks):
+    """
+    Start TfL data ingestion as a background task.
+    This prevents timeout issues. Use GET /route/ingest/status to check progress.
+    """
+    global ingestion_status
+    
+    if ingestion_status["running"]:
+        return {
+            "status": "already_running",
+            "message": "Ingestion is already in progress. Check /route/ingest/status for details."
+        }
+    
+    # Reset status
+    ingestion_status["completed_at"] = None
+    ingestion_status["error"] = None
+    
+    # Start background task
+    background_tasks.add_task(run_ingestion_task)
+    
+    return {
+        "status": "started",
+        "message": "Data ingestion started in background. Check /route/ingest/status for progress."
+    }
+
+
+@app.get("/route/ingest/status")
+async def get_ingestion_status():
+    """
+    Get the current status of the data ingestion process.
+    """
+    return ingestion_status
 
 @app.get("/route/{from}/{to}")
-async def get_route(from_location: str, to_location: str):
+async def get_route(from_location: str, to_location: str, db: Session = Depends(get_db)):
+    """
+    Calculate route from one station to another.
+    TODO: Implement route calculation logic using graph algorithms.
+    """
     # Placeholder for route calculation logic
     return {"message": f"Route from {from_location} to {to_location} calculated successfully"}
 
 @app.get("/line")
-async def get_all_routes():
+async def get_all_lines(db: Session = Depends(get_db)):
     """
-    Gets all available lines with routes and any current delays.
+    Gets all available lines from the database.
+    Use /route/ingest first to populate the database.
     """
-    return tfl_client.get_lines_with_disruptions(modes=["tube"])
+    try:
+        db_lines = db.query(db_models.Line).all()
+        
+        if not db_lines:
+            return {
+                "message": "No lines found in database. Please call /route/ingest first.",
+                "lines": []
+            }
+        
+        # Convert DB models to API models
+        mapper = ModelMapper(session=db)
+        api_lines = [mapper.db_line_to_api(line, include_routes=False) for line in db_lines]
+        
+        return {"lines": api_lines, "count": len(api_lines)}
+    
+    except Exception as e:
+        logging.error(f"Error fetching lines: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/line/{line_id}")
-async def get_route_details(line_id: str):
+async def get_line_details(line_id: str, db: Session = Depends(get_db)):
     """
-    Gets details for a specific line, including route information and any current delays.
+    Gets details for a specific line, including routes and timetable information.
     """
-    return {"message": f"Details for line {line_id} retrieved successfully"}
+    try:
+        db_line = db.query(db_models.Line).filter(db_models.Line.id == line_id).first()
+        
+        if not db_line:
+            raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
+        
+        # Convert to API model with routes
+        mapper = ModelMapper(session=db)
+        api_line = mapper.db_line_to_api(db_line, include_routes=True)
+        
+        return api_line
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error fetching line details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/line/{line_id}/live-disruptions")
+async def get_line_disruptions(line_id: str):
+    """
+    Gets live disruption information for a specific line from TfL API.
+    """
+    try:
+        lines = tfl_client.get_lines_with_disruptions(modes=[])
+        
+        for line in lines:
+            if line.id == line_id:
+                return {"line_id": line_id, "disruptions": line.disruptions}
+        
+        raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error fetching disruptions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/meta/disruption-categories")
 async def get_disruption_categories() -> list[str]:
     """
-    Gets all valid disruption categories (e.g., "severe", "minor", "planned").
+    Gets all valid disruption categories from TfL API.
     """
     return tfl_client.get_valid_disruption_categories()
 
 @app.get("/meta/modes")
-async def get_modes() -> list[Mode]:
+async def get_modes(db: Session = Depends(get_db)):
     """
-    Gets all valid transport modes (e.g., "bus", "train", "tram").
+    Gets all transport modes from the database.
     """
-    return DataIngestCommand().execute()
+    try:
+        db_modes = db.query(db_models.Mode).all()
+        
+        if not db_modes:
+            # Fall back to fetching from API if DB is empty
+            logging.info("No modes in database, fetching from API")
+            return tfl_client.get_valid_modes()
+        
+        mapper = ModelMapper(session=db)
+        return [mapper.db_mode_to_api(mode) for mode in db_modes]
+    
+    except Exception as e:
+        logging.error(f"Error fetching modes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/stats")
+async def get_database_stats(db: Session = Depends(get_db)):
+    """
+    Get statistics about the data in the database.
+    """
+    try:
+        line_count = db.query(db_models.Line).count()
+        route_count = db.query(db_models.Route).count()
+        station_count = db.query(db_models.Station).count()
+        schedule_count = db.query(db_models.Schedule).count()
+        
+        return {
+            "lines": line_count,
+            "routes": route_count,
+            "stations": station_count,
+            "schedules": schedule_count
+        }
+    except Exception as e:
+        logging.error(f"Error fetching stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/graph/stats")
+async def get_graph_stats(db: Session = Depends(get_db)):
+    """
+    Build graph from database and return statistics.
+    """
+    try:
+        from graph.graph_manager import GraphManager
+        
+        graph_manager = GraphManager()
+        graph = graph_manager.build_graph_from_db(db)
+        
+        # Calculate statistics (avg degree = 2 * edges / nodes for undirected graph)
+        avg_degree = 0.0
+        if graph.number_of_nodes() > 0:
+            avg_degree = (2 * graph.number_of_edges()) / graph.number_of_nodes()
+        
+        return {
+            "nodes": graph.number_of_nodes(),
+            "edges": graph.number_of_edges(),
+            "average_degree": round(avg_degree, 2),
+            "connected_components": len(list(graph.connected_components())) if hasattr(graph, 'connected_components') else 1 #type:ignore
+        }
+    except Exception as e:
+        logging.error(f"Error building graph: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,56 +1,98 @@
 from .tfl_client import TflClient
-from .models import Response, RouteNode, Mode
+from .models import Response
+from .database import get_db_session
+from .mapper import ModelMapper
 from logging import getLogger
-from .db_models import Station, Mode as DbMode, Line
-from uuid import uuid4
+from sqlalchemy.orm import Session
+from typing import Optional
+from tqdm import tqdm
 
 class DataIngestCommand:
 
     def __init__(self):
         self.tfl_client = TflClient()
-        self.db_client = None
         self._logger = getLogger(__name__)
 
-    def execute(self):
-        lines = self.tfl_client.get_lines_with_routes(modes=["tube"])
+    def execute(self, db_session: Optional[Session] = None) -> Response:
+        """
+        Execute the data ingestion process:
+        1. Fetch lines and routes from TfL API
+        2. Fetch timetable data for each route
+        3. Convert API models to DB models using mapper
+        4. Store everything in the database
+        """
+        self._logger.info("Starting data ingestion process...")
 
-        stop_nodes: dict[str, Station] = {}
+        # Use provided session or create a new one
+        should_close = False
+        if db_session is None:
+            from .database import SessionLocal
+            db_session = SessionLocal()
+            should_close = True
 
-        #this bit builds the stop graph
-        for line in lines:
-             for route in line.routes:
-                 for idx, stop in enumerate(route.route):
-                    if stop_nodes.get(stop.stop_name) is None:
-                        stop_nodes[stop.stop_name] = Station(
-                            id=uuid4().hex,
-                            name=stop.stop_name,
-                            naptans=[stop.stop_naptan],
-                            modes=[DbMode(
-                                name=line.mode.name,
-                                isTflService=line.mode.isTflService,
-                                isScheduledService=line.mode.isScheduledService)],
-                            lines=[Line(
-                                id=line.id,
-                                name=line.name,
-                                mode=DbMode(
-                                    name=line.mode.name,
-                                    isTflService=line.mode.isTflService,
-                                    isScheduledService=line.mode.isScheduledService),
-                                routes=[])],
-                            routes=[]
-                        )
-                    else:
-                        stop_nodes[stop.stop_name].naptans.append(stop.stop_naptan)
-                        stop_nodes[stop.stop_name].modes.append(DbMode(
-                            name=line.mode.name,
-                            isTflService=line.mode.isTflService,
-                            isScheduledService=line.mode.isScheduledService))
-                        
-                    stop_nodes[stop.stop_name].previous = stop_nodes.get(route.route[idx-1].stop_name) if idx > 0 else None
-                    stop_nodes[stop.stop_name].next = stop_nodes.get(route.route[idx+1].stop_name) if idx < len(route.route)-1 else None
-                
+        try:
+            # Initialize mapper with session
+            mapper = ModelMapper(session=db_session)
 
-        # Placeholder for database insertion logic
-        # insert Stop models here. Should use some sqlaclhemy trickery to add in the modes as a relationship rather than a json blob, to allow for easier querying later on.
+            # Fetch lines with routes and timetables
+            self._logger.info("Fetching lines, routes, and timetables from TfL API...")
+            lines, timetables = self.tfl_client.get_lines_with_routes_and_timetables(modes=["tube"])
+            
+            self._logger.info(f"Fetched {len(lines)} lines with timetables")
 
-        return Response(status="success", message=f"Ingested {len(routes)} routes from TFL API")
+            # Process each line with progress bar
+            total_routes = 0
+            total_stations = 0
+            
+            with tqdm(total=len(lines), desc="Processing lines", unit="line") as pbar:
+                for api_line in lines:
+                    pbar.set_description(f"Processing {api_line.name}")
+                    self._logger.info(f"Processing line: {api_line.name} ({api_line.id})")
+                    
+                    # Convert API line to DB line (with routes)
+                    db_line = mapper.api_line_to_db(api_line, include_routes=True)
+                    
+                    # Add timetable data to each route
+                    if api_line.id in timetables:
+                        route_pbar = tqdm(total=len(db_line.routes), desc=f"  Routes for {api_line.name}", 
+                                         unit="route", leave=False)
+                        for db_route in db_line.routes:
+                            if db_route.route_id in timetables[api_line.id]:
+                                timetable_data = timetables[api_line.id][db_route.route_id]
+                                mapper.add_timetable_to_route(db_route, timetable_data)
+                                self._logger.info(
+                                    f"  Added timetable data to route: {db_route.route_id} "
+                                    f"({len(timetable_data.get('schedules', []))} schedules)"
+                                )
+                            route_pbar.update(1)
+                        route_pbar.close()
+                    
+                    # Add line to session
+                    db_session.add(db_line)
+                    total_routes += len(db_line.routes)
+                    
+                    # Count unique stations from mapper cache
+                    total_stations = len(mapper._station_cache)
+                    
+                    pbar.update(1)
+
+            # Commit all changes
+            self._logger.info("Committing data to database...")
+            db_session.commit()
+            
+            message = (
+                f"Successfully ingested {len(lines)} lines, "
+                f"{total_routes} routes, and {total_stations} stations"
+            )
+            self._logger.info(message)
+            
+            return Response(status="success", message=message)
+
+        except Exception as e:
+            self._logger.error(f"Error during data ingestion: {e}", exc_info=True)
+            db_session.rollback()
+            return Response(status="error", message=f"Data ingestion failed: {str(e)}")
+
+        finally:
+            if should_close:
+                db_session.close()
