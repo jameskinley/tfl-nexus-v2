@@ -5,6 +5,7 @@ from .naptan_lookup import NaPTANLookup
 from tqdm import tqdm
 from dotenv import load_dotenv
 import os
+import json
 
 load_dotenv()
 
@@ -169,6 +170,32 @@ class TflClient:
                 ))
 
         return list(lines.values())
+    
+    def get_stop_points_by_mode(self, modes: list[str] = ["tube"]) -> list[Station]:
+        URL = f"/StopPoint/Mode/{','.join(modes)}"
+
+        response = self._make_request("GET", URL)
+
+        stops: dict[str, Station] = {}
+
+        for stop in tqdm(response["stopPoints"], desc="Processing stops", unit="stop"):
+            if stop["commonName"] in stops.keys():
+                stop_obj = stops[stop["commonName"]]
+                stop_obj.naptan_codes.append(stop["naptanId"])
+                continue
+
+            stop_obj = Station(
+                id=stop["commonName"], #goofy ahh
+                name=stop["commonName"],
+                lat=stop["lat"],
+                lon=stop["lon"],
+                naptan_codes=[stop["naptanId"]],
+            )
+            stops[stop["commonName"]] = stop_obj
+
+        return list(stops.values())
+            
+
 
     def get_lines_with_routes_and_timetables(self, modes: list[str] = []) -> tuple[list[Line], dict[str, dict]]:
         """

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks #type: ignore
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from data.models import *
 from data.data_ingest import DataIngestCommand
@@ -8,6 +9,8 @@ from data.mapper import ModelMapper
 from data import db_models
 import logging
 from datetime import datetime
+from graph.graph_visualiser import GraphVisualiser
+from graph.graph_manager import GraphManager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -207,6 +210,45 @@ async def get_modes(db: Session = Depends(get_db)):
         logging.error(f"Error fetching modes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/station/search")
+async def search_stations(q: str, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    Search for stations by name.
+    
+    Query Parameters:
+    - q: Search query string (case-insensitive)
+    - limit: Maximum number of results to return (default: 10, max: 100)
+    """
+    try:
+        # Validate limit
+        if limit < 1 or limit > 100:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+        
+        if not q or q.strip() == "":
+            raise HTTPException(status_code=400, detail="Search query cannot be empty")
+        
+        # Search stations by name (case-insensitive)
+        db_stations = db.query(db_models.Station)\
+            .filter(db_models.Station.name.ilike(f"%{q}%"))\
+            .limit(limit)\
+            .all()
+        
+        # Convert to API models
+        mapper = ModelMapper(session=db)
+        api_stations = [mapper.db_station_to_api(station) for station in db_stations]
+        
+        return {
+            "stations": api_stations,
+            "count": len(api_stations),
+            "query": q
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error searching stations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/stats")
 async def get_database_stats(db: Session = Depends(get_db)):
     """
@@ -253,3 +295,30 @@ async def get_graph_stats(db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"Error building graph: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/graph/visualize")
+async def visualize_graph(db: Session = Depends(get_db)):
+    """
+    Generate and return a visualization of the transport network graph.
+    Returns a PNG image of the graph.
+    """
+    try:
+        graph_manager = GraphManager()
+        graph = graph_manager.build_graph_from_db(db)
+        visualiser = GraphVisualiser(graph)
+        buf = visualiser.draw()
+
+        return StreamingResponse(buf, media_type="image/png")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error visualizing graph: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/stops/all")
+async def get_all_stops(db: Session = Depends(get_db)):
+    """
+    Load all stops from the Tfl API.
+    """
+    return tfl_client.get_stop_points_by_mode(modes=["tube"])

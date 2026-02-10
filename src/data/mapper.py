@@ -274,3 +274,15 @@ class ModelMapper:
             total_time=sum(rn.transition_time for rn in route_nodes),
             total_distance=0.0
         )
+
+    def db_station_to_api(self, db_station: db.Station) -> api.Station:
+        """Convert DB Station to API Station"""
+        return api.Station(
+            id=str(db_station.id),
+            name=str(db_station.name),
+            lat=float(db_station.lat) if db_station.lat else None,
+            lon=float(db_station.lon) if db_station.lon else None,
+            modes=[str(mode.name) for mode in db_station.modes],
+            lines=[str(line.id) for line in db_station.lines],
+            naptan_codes=[str(naptan.naptan_code) for naptan in db_station.naptans]
+        )

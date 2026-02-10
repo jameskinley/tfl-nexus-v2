@@ -58,3 +58,15 @@ class Line(BaseModel):
     mode: Mode
     disruptions: list[Delay]
     routes: list[Route] = []
+
+class Station(BaseModel):
+    id: str
+    name: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    modes: list[str] = []
+    lines: list[str] = []
+    naptan_codes: list[str] = []
+
+    def __hash__(self):
+        return hash(self.name)

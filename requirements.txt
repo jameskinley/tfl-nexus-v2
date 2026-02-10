@@ -16,6 +16,9 @@ pandas>=2.1.0
 # Graph Processing (for future route calculation)
 networkx>=3.2.0
 
+# Visualization
+matplotlib>=3.8.0
+
 # Validation
 pydantic>=2.0.0
 
