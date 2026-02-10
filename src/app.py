@@ -9,6 +9,7 @@ from data.mapper import ModelMapper
 from data import db_models
 import logging
 from datetime import datetime
+from difflib import get_close_matches
 from graph.graph_visualiser import GraphVisualiser
 from graph.graph_manager import GraphManager
 
@@ -106,14 +107,155 @@ async def get_ingestion_status():
     """
     return ingestion_status
 
-@app.get("/route/{from}/{to}")
-async def get_route(from_location: str, to_location: str, db: Session = Depends(get_db)):
+def find_closest_station(query: str, session: Session, cutoff: float = 0.2) -> Optional[db_models.Station]:
     """
-    Calculate route from one station to another.
-    TODO: Implement route calculation logic using graph algorithms.
+    Find the closest matching station by name using fuzzy string matching.
+    
+    Args:
+        query: Station name to search for
+        session: Database session
+        cutoff: Minimum similarity score (0-1) to consider a match
+        
+    Returns:
+        Closest matching Station or None if no good match found
     """
-    # Placeholder for route calculation logic
-    return {"message": f"Route from {from_location} to {to_location} calculated successfully"}
+    all_stations = session.query(db_models.Station).all()
+    
+    if not all_stations:
+        return None
+    
+    station_map: dict[str, db_models.Station] = {}
+    station_name_list: list[str] = []
+    
+    for station in all_stations:
+        name_str = str(station.name)
+        station_map[name_str] = station
+        station_name_list.append(name_str)
+    
+    matches = get_close_matches(query, station_name_list, n=1, cutoff=cutoff)
+    
+    if matches:
+        return station_map[matches[0]]
+    
+    return None
+
+
+@app.get("/route/{from_location}/{to_location}")
+async def get_route(from_location: str, to_location: str, time: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Calculate shortest route from one station to another using the tube network graph.
+    
+    Path Parameters:
+    - from_location: Starting station name (fuzzy matching supported)
+    - to_location: Destination station name (fuzzy matching supported)
+    
+    Query Parameters:
+    - current_time: Optional time in HH:MM format for time-aware routing (default: None for static routing)
+    
+    Returns route with list of stations and travel details.
+    """
+
+    if not time:
+        time = datetime.now().strftime("%H:%M")
+
+    try:
+        from_station = find_closest_station(from_location, db)
+        if not from_station:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Could not find station matching '{from_location}'. Please try a different search term."
+            )
+        
+        to_station = find_closest_station(to_location, db)
+        if not to_station:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not find station matching '{to_location}'. Please try a different search term."
+            )
+        
+        if str(from_station.id) == str(to_station.id):
+            raise HTTPException(
+                status_code=400,
+                detail="Origin and destination stations are the same"
+            )
+        
+        graph_manager = GraphManager()
+        graph_manager.build_graph_from_db(db)
+        
+        if not graph_manager.graph.has_node(from_station.id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Station '{from_station.name}' is not connected to the network"
+            )
+        
+        if not graph_manager.graph.has_node(to_station.id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Station '{to_station.name}' is not connected to the network"
+            )
+        
+        try:
+            path = graph_manager.route_time_only(from_station.id, to_station.id, time)
+        except Exception as e:
+            if "not in" in str(e) or "NetworkXNoPath" in str(type(e).__name__):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No route found between '{from_station.name}' and '{to_station.name}'"
+                )
+            raise
+        
+        route_stations = []
+        total_time = 0.0
+        
+        for i, station_id in enumerate(path):
+            station_data = graph_manager.graph.nodes[station_id]
+            
+            segment_time = 0.0
+            segment_line = None
+            segment_mode = None
+            
+            if i < len(path) - 1:
+                next_station_id = path[i + 1]
+                edge_data = graph_manager.graph[station_id][next_station_id]
+                segment_time = edge_data.get('time_distance', 0.0)
+                segment_line = edge_data.get('line')
+                segment_mode = edge_data.get('mode')
+                total_time += segment_time
+            
+            route_stations.append({
+                "station_id": station_id,
+                "station_name": station_data.get('name'),
+                "lat": station_data.get('lat'),
+                "lon": station_data.get('lon'),
+                "ordinal": i,
+                "time_to_next": segment_time if i < len(path) - 1 else 0.0,
+                "line": segment_line,
+                "mode": segment_mode
+            })
+        
+        return {
+            "status": "success",
+            "from": {
+                "query": from_location,
+                "matched": from_station.name,
+                "station_id": from_station.id
+            },
+            "to": {
+                "query": to_location,
+                "matched": to_station.name,
+                "station_id": to_station.id
+            },
+            "route": route_stations,
+            "total_stations": len(route_stations),
+            "total_time_minutes": round(total_time, 2),
+            "current_time": time
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error calculating route: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error calculating route: {str(e)}")
 
 @app.get("/line")
 async def get_all_lines(db: Session = Depends(get_db)):
