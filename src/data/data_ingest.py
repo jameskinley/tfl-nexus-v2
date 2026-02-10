@@ -9,6 +9,7 @@ from .database import SessionLocal
 from .mapper import ModelMapper
 from .models import Response
 from .tfl_client import TflClient
+from . import constants
 from . import db_models as db
 
 
@@ -46,7 +47,7 @@ class DataIngestCommand:
 
         try:
             mapper = ModelMapper(session=db_session)
-            modes = ["tube"]
+            modes = constants.VALID_MODES
             
             stats = self._ingest_stops(db_session, modes)
             stats.update(self._ingest_lines_and_routes(db_session, mapper, modes))
@@ -64,13 +65,16 @@ class DataIngestCommand:
             if should_close:
                 db_session.close()
 
-    def _ingest_stops(self, db_session: Session, modes: list[str]) -> dict:
+    def _ingest_stops(self, db_session: Session, modes: list[str] | None = None) -> dict:
         """
         Fetch and ingest all stop points with geographic data from TfL API.
         
         Creates Station records with lat/lon coordinates and associated NaPTAN codes.
         Returns statistics about ingested stops.
         """
+        if modes is None:
+            modes = constants.VALID_MODES
+        
         self._logger.info(f"Fetching stops for modes: {modes}")
         api_stations = self.tfl_client.get_stop_points_by_mode(modes=modes)
         

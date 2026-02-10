@@ -311,7 +311,7 @@ async def get_line_disruptions(line_id: str):
     Gets live disruption information for a specific line from TfL API.
     """
     try:
-        lines = tfl_client.get_lines_with_disruptions(modes=[])
+        lines = tfl_client.get_lines_with_disruptions()
         
         for line in lines:
             if line.id == line_id:
@@ -333,24 +333,11 @@ async def get_disruption_categories() -> list[str]:
     return tfl_client.get_valid_disruption_categories()
 
 @app.get("/meta/modes")
-async def get_modes(db: Session = Depends(get_db)):
+async def get_modes():
     """
-    Gets all transport modes from the database.
+    Gets all transport modes from the API.
     """
-    try:
-        db_modes = db.query(db_models.Mode).all()
-        
-        if not db_modes:
-            # Fall back to fetching from API if DB is empty
-            logging.info("No modes in database, fetching from API")
-            return tfl_client.get_valid_modes()
-        
-        mapper = ModelMapper(session=db)
-        return [mapper.db_mode_to_api(mode) for mode in db_modes]
-    
-    except Exception as e:
-        logging.error(f"Error fetching modes: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return tfl_client.get_valid_modes()
 
 @app.get("/station/search")
 async def search_stations(q: str, limit: int = 10, db: Session = Depends(get_db)):
@@ -463,4 +450,4 @@ async def get_all_stops(db: Session = Depends(get_db)):
     """
     Load all stops from the Tfl API.
     """
-    return tfl_client.get_stop_points_by_mode(modes=["tube"])
+    return tfl_client.get_stop_points_by_mode()

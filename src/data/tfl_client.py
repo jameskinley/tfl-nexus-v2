@@ -1,6 +1,6 @@
 from logging import getLogger
 from dotenv import load_dotenv
-import json
+from . import constants
 import os
 
 from requests import request
@@ -178,7 +178,10 @@ class TflClient:
 
         return list(lines.values())
     
-    def get_stop_points_by_mode(self, modes: list[str] = ["tube"]) -> list[Station]:
+    def get_stop_points_by_mode(self, modes: list[str] | None = None) -> list[Station]:
+        if modes is None:
+            modes = constants.VALID_MODES
+        
         URL = f"/StopPoint/Mode/{','.join(modes)}"
 
         response = self._make_request("GET", URL)
