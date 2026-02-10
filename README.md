@@ -186,8 +186,7 @@ tfl-nexus-v2/
 │       ├── db_models.py      # Database models (SQLAlchemy)
 │       ├── mapper.py         # Model conversion layer
 │       ├── database.py       # Database configuration
-│       ├── data_ingest.py    # Data ingestion logic
-│       └── naptan_lookup.py  # NaPTAN code resolver
+│       └── data_ingest.py    # Data ingestion pipeline
 ├── requirements.txt           # Python dependencies
 └── README.md                 # This file
 ```

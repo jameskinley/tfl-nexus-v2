@@ -1,20 +1,27 @@
-from requests import request
-from .models import *
 from logging import getLogger
-from .naptan_lookup import NaPTANLookup
-from tqdm import tqdm
 from dotenv import load_dotenv
-import os
 import json
+import os
+
+from requests import request
+from tqdm import tqdm
+
+from .models import *
 
 load_dotenv()
 
+
 class TflClient:
+    """
+    Client for interacting with Transport for London (TfL) API.
+    
+    Provides methods to fetch lines, routes, timetables, and stop points.
+    """
+    
     def __init__(self):
         self.base_url = "https://api.tfl.gov.uk"
         self.app_key = os.getenv("TFL_PRIMARY_KEY")
         self._logger = getLogger(__name__)
-        self.naptan_lookup = NaPTANLookup()
 
     def get_valid_disruption_categories(self) -> list[str]:
         URL = "/Line/Meta/DisruptionCategories"
@@ -160,7 +167,7 @@ class TflClient:
                     route_id=route_name,
                     route=[RouteNode(
                         ordinal=idx,
-                        stop_name=self.naptan_lookup.get_stop_name(stop),
+                        stop_name=stop,
                         stop_naptan=stop,
                         line=line_id,
                         mode=lines[line_id].mode.name,

@@ -64,11 +64,10 @@ class Station(Base):
     __tablename__ = 'stations'
 
     id = Column(String, primary_key=True)
-    name = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False, unique=True, index=True)
     lat = Column(Float, nullable=True)
     lon = Column(Float, nullable=True)
 
-    # Relationships
     modes = relationship("Mode", secondary=station_mode_association, back_populates="stations")
     lines = relationship("Line", secondary=station_line_association, back_populates="stations")
     naptans = relationship("StationNaptan", back_populates="station", cascade="all, delete-orphan")

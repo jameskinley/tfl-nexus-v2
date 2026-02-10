@@ -1,19 +1,21 @@
 """
-Mapper between API models (models.py) and Database models (db_models.py)
-Provides bidirectional conversion for DTO pattern
+Mapper between API models (models.py) and Database models (db_models.py).
+Provides bidirectional conversion for DTO pattern.
 """
+from logging import getLogger
 from typing import Optional
 from uuid import uuid4
+
 from sqlalchemy.orm import Session
-from . import models as api
+
 from . import db_models as db
-from logging import getLogger
+from . import models as api
 
 logger = getLogger(__name__)
 
 
 class ModelMapper:
-    """Handles conversion between API and Database models"""
+    """Handles conversion between API and Database models."""
 
     def __init__(self, session: Optional[Session] = None):
         self.session = session
@@ -91,16 +93,37 @@ class ModelMapper:
         return db_route
 
     def _get_or_create_station(self, name: str, naptan: str) -> db.Station:
-        """Get existing station or create new one"""
-        # Check cache first
+        """
+        Get existing station from database or create new one.
+        
+        Looks up station by NaPTAN code since stations are pre-ingested with
+        geographic data. If not found, creates station without coordinates
+        and logs a warning.
+        
+        Args:
+            name: Station name
+            naptan: NaPTAN code for the station
+            
+        Returns:
+            Database Station object with or without geographic data.
+        """
         if name in self._station_cache:
             station = self._station_cache[name]
-            # Add naptan if not already present
             if naptan and not any(n.naptan_code == naptan for n in station.naptans):
                 station.naptans.append(db.StationNaptan(naptan_code=naptan))
             return station
         
-        # Check database if session available
+        if self.session and naptan:
+            station_naptan = (
+                self.session.query(db.StationNaptan)
+                .filter_by(naptan_code=naptan)
+                .first()
+            )
+            if station_naptan:
+                station = station_naptan.station
+                self._station_cache[name] = station
+                return station
+        
         if self.session:
             station = self.session.query(db.Station).filter_by(name=name).first()
             if station:
@@ -109,7 +132,11 @@ class ModelMapper:
                     station.naptans.append(db.StationNaptan(naptan_code=naptan))
                 return station
         
-        # Create new station
+        logger.warning(
+            f"Station '{name}' with NaPTAN '{naptan}' not found in pre-ingested data. "
+            f"Creating without geographic coordinates."
+        )
+        
         station = db.Station(
             id=uuid4().hex,
             name=name
