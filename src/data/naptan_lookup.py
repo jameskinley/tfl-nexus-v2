@@ -2,11 +2,11 @@ import pandas as pd
 from logging import getLogger
 
 class NaPTANLookup:
-    def __init__(self, file_path: str = "../data/Stops.csv"):
+    def __init__(self, file_path: str = "../data/NLC_Naptan.csv"):
         df = pd.read_csv(file_path)
 
-        self.naptan_to_name = dict(zip(df["ATCOCode"], df["CommonName"]))
-        self.name_to_naptan = dict(zip(df["CommonName"], df["ATCOCode"]))
+        self.naptan_to_name = dict(zip(df["PrimaryNaptanStopArea"], df["UniqueStationName"]))
+        self.name_to_naptan = dict(zip(df["UniqueStationName"], df["PrimaryNaptanStopArea"]))
 
         self._logger = getLogger(__name__)
         self._logger.info(f"Loaded NaPTAN lookup with {len(self.naptan_to_name)} entries")

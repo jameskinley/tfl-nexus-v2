@@ -1,11 +1,10 @@
 import networkx as nx
 from sqlalchemy.orm import Session
-from ..data import db_models
+from data import db_models
 from logging import getLogger
 from datetime import datetime, time
 
 logger = getLogger(__name__)
-
 
 class GraphManager:
     """
