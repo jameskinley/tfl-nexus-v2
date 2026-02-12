@@ -43,7 +43,7 @@ class RouteCalculationCommand:
 
     def calculate_route(self, from_location: str, to_location: str, time: str) -> dict:
         graph_manager = GraphManager()
-        graph_manager.build_graph_from_db(self.db_session)
+        graph_manager.build_graph_from_db_with_disruptions(self.db_session)
         
         self.logger.info(f"Graph has {graph_manager.graph.number_of_nodes()} nodes")
         self.logger.info(f"Finding route from '{from_location}' to '{to_location}' at time {time}")
@@ -77,12 +77,13 @@ class RouteCalculationCommand:
             if "not in" in str(e) or "NetworkXNoPath" in str(type(e).__name__):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"No route found between '{from_station.name}' and '{to_station.name}'"
+                    detail=f"No route found between '{from_station.name}' and '{to_station.name}'. This may be due to service disruptions."
                 )
             raise
         
         route_stations = []
         total_time = 0.0
+        has_disruptions = False
         
         for i, station_id in enumerate(path):
             station_data = graph_manager.graph.nodes[station_id]
@@ -90,6 +91,7 @@ class RouteCalculationCommand:
             segment_time = 0.0
             segment_line = None
             segment_mode = None
+            segment_disrupted = False
             
             if i < len(path) - 1:
                 next_station_id = path[i + 1]
@@ -97,6 +99,9 @@ class RouteCalculationCommand:
                 segment_time = edge_data.get('time_distance', 0.0)
                 segment_line = edge_data.get('line')
                 segment_mode = edge_data.get('mode')
+                segment_disrupted = edge_data.get('disrupted', False)
+                if segment_disrupted:
+                    has_disruptions = True
                 total_time += segment_time
             
             route_stations.append({
@@ -107,7 +112,8 @@ class RouteCalculationCommand:
                 "ordinal": i,
                 "time_to_next": segment_time if i < len(path) - 1 else 0.0,
                 "line": segment_line,
-                "mode": segment_mode
+                "mode": segment_mode,
+                "disrupted": segment_disrupted
             })
         
         return {
@@ -125,5 +131,6 @@ class RouteCalculationCommand:
             "route": route_stations,
             "total_stations": len(route_stations),
             "total_time_minutes": round(total_time, 2),
-            "current_time": time
+            "current_time": time,
+            "has_disruptions": has_disruptions
         }

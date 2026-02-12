@@ -40,9 +40,9 @@ class Delay(BaseModel):
     created: str
     lastUpdate: str
     
-    # When there are only delays / suspensions between A and B!
     from_stop: Optional[str] = None
     to_stop: Optional[str] = None
+    affected_stops: list[str] = []
 
 class Mode(BaseModel):
     name: str

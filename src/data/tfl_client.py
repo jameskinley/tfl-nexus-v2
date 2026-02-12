@@ -330,7 +330,41 @@ class TflClient:
                 line_ids = [route.get("lineId") for route in disruption["affectedRoutes"] if route.get("lineId")]
             
             if not line_ids:
+                description = disruption.get("description", "")
+                summary = disruption.get("summary", "")
+                text_to_search = (description + " " + summary).lower()
+                
+                line_name_map = {
+                    "northern": "northern",
+                    "central": "central",
+                    "piccadilly": "piccadilly",
+                    "district": "district",
+                    "circle": "circle",
+                    "metropolitan": "metropolitan",
+                    "hammersmith": "hammersmith-city",
+                    "bakerloo": "bakerloo",
+                    "jubilee": "jubilee",
+                    "victoria": "victoria",
+                    "waterloo": "waterloo-city",
+                    "elizabeth": "elizabeth",
+                    "dlr": "dlr",
+                    "overground": "london-overground",
+                    "tram": "tram"
+                }
+                
+                for name, line_id in line_name_map.items():
+                    if name in text_to_search:
+                        line_ids.append(line_id)
+                        break
+            
+            if not line_ids:
                 line_ids = ["unknown"]
+            
+            affected_stop_ids = []
+            if "affectedStops" in disruption and disruption["affectedStops"]:
+                for stop in disruption["affectedStops"]:
+                    if "id" in stop:
+                        affected_stop_ids.append(stop["id"])
             
             for line_id in line_ids:
                 delay = Delay(
@@ -344,7 +378,8 @@ class TflClient:
                     additionalInfo=disruption.get("additionalInfo", ""),
                     created=disruption.get("created", ""),
                     lastUpdate=disruption.get("lastUpdate", ""),
-                    mode=""
+                    mode="",
+                    affected_stops=affected_stop_ids
                 )
                 disruptions.append(delay)
         

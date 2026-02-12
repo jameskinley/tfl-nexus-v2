@@ -10,7 +10,7 @@ class GraphOperationsCommand:
 
     def get_graph_stats(self) -> dict:
         graph_manager = GraphManager()
-        graph = graph_manager.build_graph_from_db(self.db_session)
+        graph = graph_manager.build_graph_from_db_with_disruptions(self.db_session)
         
         avg_degree = 0.0
         if graph.number_of_nodes() > 0:
@@ -25,7 +25,7 @@ class GraphOperationsCommand:
 
     def visualize_graph(self) -> BytesIO:
         graph_manager = GraphManager()
-        graph = graph_manager.build_graph_from_db(self.db_session)
+        graph = graph_manager.build_graph_from_db_with_disruptions(self.db_session)
         visualiser = GraphVisualiser(graph)
         buf = visualiser.draw()
         return buf

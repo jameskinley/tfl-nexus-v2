@@ -143,8 +143,40 @@ class KnownJourney(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     schedule_id = Column(Integer, ForeignKey('schedules.id'), nullable=False)
     
-    departure_time = Column(Float, nullable=False)  # Minutes from midnight
-    interval_id = Column(Integer, nullable=True)  # Reference to which station interval set applies
+    departure_time = Column(Float, nullable=False)
+    interval_id = Column(Integer, nullable=True)
 
-    # Relationships
     schedule = relationship("Schedule", back_populates="known_journeys")
+
+
+class Disruption(Base):
+    """Stores current and historical disruptions"""
+    __tablename__ = 'disruptions'
+
+    id = Column(String, primary_key=True)
+    line_id = Column(String, ForeignKey('lines.id'), nullable=False)
+    type = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    category_description = Column(String, nullable=True)
+    summary = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    additional_info = Column(Text, nullable=True)
+    created = Column(String, nullable=True)
+    last_update = Column(String, nullable=True)
+    closure_text = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    line = relationship("Line", foreign_keys=[line_id])
+    affected_stops = relationship("DisruptedStop", back_populates="disruption", cascade="all, delete-orphan")
+
+
+class DisruptedStop(Base):
+    """Stores stops affected by disruptions"""
+    __tablename__ = 'disrupted_stops'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    disruption_id = Column(String, ForeignKey('disruptions.id'), nullable=False)
+    station_id = Column(String, ForeignKey('stations.id'), nullable=False)
+    
+    disruption = relationship("Disruption", back_populates="affected_stops")
+    station = relationship("Station")

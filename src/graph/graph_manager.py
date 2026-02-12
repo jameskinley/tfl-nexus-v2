@@ -293,3 +293,84 @@ class GraphManager:
             return (time_weight * time_cost) + (fragility_weight * fragility_cost)
         
         return nx.shortest_path(self.graph, source=start_stop, target=end_stop, weight=combined_weight)
+
+    def apply_disruptions(self, session: Session):
+        """
+        Apply active disruptions to the graph by modifying edge weights and availability.
+        
+        Disruption handling:
+        - Suspended service: Remove all edges for that line
+        - Part suspension: Remove edges between affected stops
+        - Severe delays: Increase edge weights by 50%
+        - Minor delays: Increase edge weights by 25%
+        
+        Args:
+            session: Database session to query disruptions
+        """
+        active_disruptions = session.query(db_models.Disruption).filter(
+            db_models.Disruption.is_active == True
+        ).all()
+        
+        disrupted_edges = []
+        
+        for disruption in active_disruptions:
+            line_id = disruption.line_id
+            category = disruption.category.lower()
+            
+            if "suspend" in category or "closure" in category:
+                edges_to_remove = [
+                    (u, v) for u, v, data in self.graph.edges(data=True)
+                    if data.get('line') == line_id
+                ]
+                
+                if disruption.affected_stops:
+                    affected_station_ids = {stop.station_id for stop in disruption.affected_stops}
+                    edges_to_remove = [
+                        (u, v) for u, v in edges_to_remove
+                        if u in affected_station_ids or v in affected_station_ids
+                    ]
+                
+                for u, v in edges_to_remove:
+                    if self.graph.has_edge(u, v):
+                        self.graph.remove_edge(u, v)
+                        disrupted_edges.append((u, v, line_id, "suspended"))
+                        
+            elif "delay" in category:
+                delay_factor = 1.5 if "severe" in category else 1.25
+                
+                edges_to_modify = [
+                    (u, v) for u, v, data in self.graph.edges(data=True)
+                    if data.get('line') == line_id
+                ]
+                
+                if disruption.affected_stops:
+                    affected_station_ids = {stop.station_id for stop in disruption.affected_stops}
+                    edges_to_modify = [
+                        (u, v) for u, v in edges_to_modify
+                        if u in affected_station_ids or v in affected_station_ids
+                    ]
+                
+                for u, v in edges_to_modify:
+                    if self.graph.has_edge(u, v):
+                        edge_data = self.graph[u][v]
+                        original_time = edge_data.get('base_time', edge_data.get('time_distance', 1.0))
+                        edge_data['time_distance'] = original_time * delay_factor
+                        edge_data['disrupted'] = True
+                        disrupted_edges.append((u, v, line_id, f"delayed_{delay_factor}x"))
+        
+        logger.info(f"Applied {len(active_disruptions)} disruptions, affecting {len(disrupted_edges)} edges")
+        return disrupted_edges
+
+    def build_graph_from_db_with_disruptions(self, session: Session):
+        """
+        Build graph from database and apply current disruptions.
+        
+        Args:
+            session: Active SQLAlchemy session
+            
+        Returns:
+            NetworkX graph with disruptions applied
+        """
+        self.build_graph_from_db(session)
+        self.apply_disruptions(session)
+        return self.graph

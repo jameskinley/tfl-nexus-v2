@@ -71,7 +71,7 @@ class StationOperationsCommand:
             )
         
         graph_manager = GraphManager()
-        graph_manager.build_graph_from_db(self.db_session)
+        graph_manager.build_graph_from_db_with_disruptions(self.db_session)
         
         interval_count = self.db_session.query(db_models.StationInterval)\
             .filter(db_models.StationInterval.station_id == station.id).count()
