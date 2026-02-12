@@ -37,7 +37,7 @@ class TflClient:
 
         response = self._make_request("GET", URL)
 
-        self._logger.info(f"Received response from TFL API: {response}")
+        self._logger.debug(f"Received response from TFL API: {response}")
 
         return [Mode(
             name=res["modeName"],
@@ -280,7 +280,7 @@ class TflClient:
 
         lines = dict[str, Line]()
 
-        self._logger.info(f"Received response from TFL API: {response}")
+        self._logger.debug(f"Received response from TFL API: {response}")
 
         for res in response:
             line = Line(

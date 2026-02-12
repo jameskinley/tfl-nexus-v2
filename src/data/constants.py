@@ -1,1 +1,1 @@
-VALID_MODES = ["tube", "dlr", "overground", "interchange-keep-sitting", "interchange-secure"]
+VALID_MODES = ["tube"]

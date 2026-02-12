@@ -76,9 +76,6 @@ class GraphManager:
             # Get intervals ordered by ordinal (position in route)
             intervals = sorted(route.station_intervals, key=lambda x: x.ordinal)
             
-            if len(intervals) < 2:
-                continue  # Need at least 2 stations to create edges
-            
             # Add nodes for all stations in this route
             for interval in intervals:
                 station = interval.station
@@ -97,6 +94,12 @@ class GraphManager:
                         lon=station.lon
                     )
                     node_count += 1
+                    if station.name.startswith("Chadwell"):
+                        logger.info(f"Added node for Chadwell Heath Station with ID {station.id}")
+            
+            # Need at least 2 stations to create edges
+            if len(intervals) < 2:
+                continue
             
             # Get schedules for this route to store time-dependent travel times
             schedule_times = {}

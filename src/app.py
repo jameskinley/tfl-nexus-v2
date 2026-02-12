@@ -107,7 +107,7 @@ async def get_ingestion_status():
     """
     return ingestion_status
 
-def find_closest_station(query: str, session: Session, cutoff: float = 0.2) -> Optional[db_models.Station]:
+def find_closest_station(query: str, session: Session, cutoff: float = 0.2, graph_manager: Optional[GraphManager] = None) -> Optional[db_models.Station]:
     """
     Find the closest matching station by name using fuzzy string matching.
     
@@ -115,6 +115,7 @@ def find_closest_station(query: str, session: Session, cutoff: float = 0.2) -> O
         query: Station name to search for
         session: Database session
         cutoff: Minimum similarity score (0-1) to consider a match
+        graph_manager: Optional GraphManager. If provided, only returns stations that are in the graph.
         
     Returns:
         Closest matching Station or None if no good match found
@@ -128,6 +129,10 @@ def find_closest_station(query: str, session: Session, cutoff: float = 0.2) -> O
     station_name_list: list[str] = []
     
     for station in all_stations:
+        # If graph_manager provided, only include stations that are in the graph
+        if graph_manager and not graph_manager.graph.has_node(station.id):
+            continue
+            
         name_str = str(station.name)
         station_map[name_str] = station
         station_name_list.append(name_str)
@@ -154,44 +159,41 @@ async def get_route(from_location: str, to_location: str, time: Optional[str] = 
     
     Returns route with list of stations and travel details.
     """
+    logger = logging.getLogger("route_calculation")
 
     if not time:
         time = datetime.now().strftime("%H:%M")
 
     try:
-        from_station = find_closest_station(from_location, db)
+        # Build graph first
+        graph_manager = GraphManager()
+        graph_manager.build_graph_from_db(db)
+        
+        logger.info(f"Graph has {graph_manager.graph.number_of_nodes()} nodes")
+        logger.info(f"Finding route from '{from_location}' to '{to_location}' at time {time}")
+        
+        # Find closest stations that are actually IN the graph
+        from_station = find_closest_station(from_location, db, graph_manager=graph_manager)
+        
         if not from_station:
             raise HTTPException(
                 status_code=404, 
-                detail=f"Could not find station matching '{from_location}'. Please try a different search term."
+                detail=f"Could not find connected station matching '{from_location}'. Please try a different search term."
             )
         
-        to_station = find_closest_station(to_location, db)
+        logger.info(f"Matched from_location to station: {from_station.id} {from_station.name}")
+        
+        to_station = find_closest_station(to_location, db, graph_manager=graph_manager)
         if not to_station:
             raise HTTPException(
                 status_code=404,
-                detail=f"Could not find station matching '{to_location}'. Please try a different search term."
+                detail=f"Could not find connected station matching '{to_location}'. Please try a different search term."
             )
         
         if str(from_station.id) == str(to_station.id):
             raise HTTPException(
                 status_code=400,
                 detail="Origin and destination stations are the same"
-            )
-        
-        graph_manager = GraphManager()
-        graph_manager.build_graph_from_db(db)
-        
-        if not graph_manager.graph.has_node(from_station.id):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Station '{from_station.name}' is not connected to the network"
-            )
-        
-        if not graph_manager.graph.has_node(to_station.id):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Station '{to_station.name}' is not connected to the network"
             )
         
         try:
@@ -451,3 +453,83 @@ async def get_all_stops(db: Session = Depends(get_db)):
     Load all stops from the Tfl API.
     """
     return tfl_client.get_stop_points_by_mode()
+
+@app.get("/graph/station/{station_name}")
+async def check_station_in_graph(station_name: str, db: Session = Depends(get_db)):
+    """
+    Check if a station exists in the graph by name.
+    Uses fuzzy matching to find the closest station match.
+    
+    Path Parameters:
+    - station_name: Station name to search for (fuzzy matching supported)
+    
+    Returns station details and graph connectivity information.
+    """
+    try:
+        # Find closest matching station in database (don't filter by graph)
+        station = find_closest_station(station_name, db, graph_manager=None)
+        
+        if not station:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not find station matching '{station_name}'. Please try a different search term."
+            )
+        
+        # Build graph and check if station is in it
+        graph_manager = GraphManager()
+        graph_manager.build_graph_from_db(db)
+        
+        # Check if station has any intervals
+        interval_count = db.query(db_models.StationInterval).filter(db_models.StationInterval.station_id == station.id).count()
+        
+        in_graph = graph_manager.graph.has_node(station.id)
+        
+        response = {
+            "query": station_name,
+            "matched_station": {
+                "id": station.id,
+                "name": station.name,
+                "lat": station.lat,
+                "lon": station.lon
+            },
+            "in_graph": in_graph,
+            "has_route_data": interval_count > 0
+        }
+        
+        if in_graph:
+            # Add graph-specific information
+            node_data = graph_manager.graph.nodes[station.id]
+            neighbors = list(graph_manager.graph.neighbors(station.id))
+            neighbor_names = [graph_manager.graph.nodes[n]['name'] for n in neighbors]
+            
+            response["graph_info"] = {
+                "connected_stations": len(neighbors),
+                "neighbors": neighbor_names[:10],  # Limit to first 10 neighbors
+                "lines": node_data.get('lines', []),
+                "modes": node_data.get('modes', [])
+            }
+            
+            if len(neighbors) == 0:
+                response["warning"] = "Station is in graph but has no connections (isolated node)"
+        else:
+            # Check if there's a similar station that IS in the graph
+            connected_station = find_closest_station(station_name, db, graph_manager=graph_manager)
+            if connected_station and connected_station.id != station.id:
+                response["suggestion"] = {
+                    "message": "Found a connected station with similar name",
+                    "station": {
+                        "id": connected_station.id,
+                        "name": connected_station.name,
+                        "lat": connected_station.lat,
+                        "lon": connected_station.lon
+                    }
+                }
+            response["error"] = "Station exists in database but is not in the graph (no route intervals)"
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error checking station in graph: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error checking station: {str(e)}")
