@@ -314,5 +314,42 @@ class TflClient:
 
         return disruptions
 
+    def get_all_disruptions(self, modes: list[str] = []) -> list[Delay]:
+        if len(modes) == 0:
+            modes = constants.VALID_MODES
+
+        URL = f"/Line/Mode/{','.join(modes)}/Disruption"
+
+        response = self._make_request("GET", URL)
+
+        disruptions = []
+        
+        for disruption in response:
+            line_ids = []
+            if "affectedRoutes" in disruption and disruption["affectedRoutes"]:
+                line_ids = [route.get("lineId") for route in disruption["affectedRoutes"] if route.get("lineId")]
+            
+            if not line_ids:
+                line_ids = ["unknown"]
+            
+            for line_id in line_ids:
+                delay = Delay(
+                    id=f"{disruption.get('category', 'unknown')}-{line_id}",
+                    line_id=line_id,
+                    type=disruption.get("type", ""),
+                    category=disruption.get("category", ""),
+                    categoryDescription=disruption.get("categoryDescription", ""),
+                    summary=disruption.get("summary", ""),
+                    description=disruption.get("description", ""),
+                    additionalInfo=disruption.get("additionalInfo", ""),
+                    created=disruption.get("created", ""),
+                    lastUpdate=disruption.get("lastUpdate", ""),
+                    mode=""
+                )
+                disruptions.append(delay)
+        
+        return disruptions
+
+
     def _make_request(self, method: str, endpoint: str):
         return request(method, self.base_url + endpoint, params={"app_key": self.app_key}).json()
