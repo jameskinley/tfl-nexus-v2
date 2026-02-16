@@ -10,6 +10,10 @@ A comprehensive Transport for London (TfL) data ingestion and routing system wit
 - ✅ **Mapper Pattern**: Clean separation between API models and database models
 - ✅ **FastAPI REST API**: Modern async web framework with automatic documentation
 - ✅ **Time-Aware Queries**: Query schedules by time of day for accurate service information
+- ✅ **Intelligent Routing**: Multiple routing strategies (fastest, robust, low-crowding, ML hybrid)
+- ✅ **Disruption Analysis**: Bayesian-based reliability scoring from historical disruptions
+- ✅ **Network Reports**: Automated report generation with optional LLM summarization
+- ✅ **Crowding Data**: Real-time crowding metrics from TfL API
 
 ## Architecture
 
@@ -42,6 +46,12 @@ TfL API → TflClient → API Models (models.py) → Mapper → DB Models (db_mo
 - **schedules**: Service schedules (weekday, weekend, etc.)
 - **periods**: Frequency periods (e.g., peak hours: 3-5 min frequency)
 - **known_journeys**: Specific scheduled departure times
+
+### Disruption & Analysis Tables
+- **disruptions**: Network disruptions with historical tracking
+- **disruption_events**: Event log for disruption state changes
+- **station_crowding**: Real-time crowding metrics per station/line
+- **network_reports**: Automated network status reports
 
 ### Association Tables
 - **station_mode**: Many-to-many Station ↔ Mode
@@ -99,6 +109,18 @@ TfL API → TflClient → API Models (models.py) → Mapper → DB Models (db_mo
 - `GET /line/{line_id}/live-disruptions` - Get live disruption info
 - `GET /meta/modes` - List transport modes
 - `GET /meta/disruption-categories` - List disruption categories
+
+### Routing Endpoints
+- `GET /routes/{from_station}/{to_station}` - Calculate route between stations
+  - Query params: `mode` (fastest/robust/low_crowding/ml_hybrid), `alternatives` (number of alternatives)
+- `GET /routes/strategies` - List available routing strategies
+
+### Network Reports (CRUD)
+- `POST /reports` - Create a new network report
+- `GET /reports` - List all reports (with filtering and pagination)
+- `GET /reports/{id}` - Get a specific report with full details
+- `PUT /reports/{id}` - Update an existing report
+- `DELETE /reports/{id}` - Delete a report
 
 ### Future Endpoints
 - `GET /route/{from}/{to}` - Calculate route between stations (TODO)
@@ -169,6 +191,18 @@ python src/init_db.py  # Automatically drops and recreates tables
 
 ### Environment Variables
 - `DATABASE_URL`: Database connection string (default: `sqlite:///tfl_nexus.db`)
+- `TFL_API_KEY`: TfL API key (optional, for rate limits)
+- `TFL_APP_ID`: TfL Application ID (optional)
+- `USE_LLM_SUMMARIZER`: Set to `true` to enable LLM-based report summaries (default: `false`)
+- `LLM_API_ENDPOINT`: LLM API endpoint URL (required if USE_LLM_SUMMARIZER=true)
+- `LLM_API_KEY`: LLM API key (required if USE_LLM_SUMMARIZER=true)
+
+### Configuration File
+Copy `.env.example` to `.env` and configure your settings:
+```bash
+cp .env.example .env
+# Edit .env with your API keys and preferences
+```
 
 ## Development
 
@@ -234,10 +268,45 @@ This enables:
 - Journey planning with accurate timing
 - Support for both scheduled and frequency-based services
 
+### Intelligent Routing Strategies
+The system supports multiple routing modes to optimize for different user preferences:
+
+1. **Fastest Route** (`fastest`): Minimizes total journey time
+2. **Robust Route** (`robust`): Balances speed with disruption probability using Bayesian analysis
+3. **Low Crowding** (`low_crowding`): Avoids heavily crowded stations and lines
+4. **ML Hybrid** (`ml_hybrid`): Weighted combination of all factors (time, reliability, crowding)
+
+#### Disruption Analysis
+The system uses **Bayesian inference** to predict edge fragility:
+- Prior reliability: 95% (assumed base reliability)
+- Posterior reliability: Updated based on historical disruption frequency
+- Output: Fragility scores per line and station for weighted routing
+
+#### Crowding Integration
+Real-time crowding data from TfL API is periodically polled and integrated into routing:
+- Crowding levels: low, medium, high, very_high
+- Applied as penalties in `low_crowding` and `ml_hybrid` strategies
+- Background polling every 5 minutes
+
+### Network Reports
+Automated network status reports generated daily (or on-demand):
+- Disruption counts and breakdown by category
+- Line status summary
+- Graph connectivity metrics
+- Reliability scores
+- Crowding summary
+
+Reports support **pluggable summarizers**:
+- **Simple Template**: Rule-based text generation
+- **LLM Integration**: Optional AI-powered summaries (configured via backend environment variables)
+
 ### Future Enhancements
-- [ ] Implement route calculation using NetworkX
+- [x] Implement route calculation using NetworkX
+- [x] Store live disruption data in database
+- [x] Add intelligent routing with multiple strategies
+- [x] Implement disruption analysis and prediction
+- [x] Network reports with LLM integration support
 - [ ] Add station coordinates from TfL API
-- [ ] Store live disruption data in database
 - [ ] Add caching layer (Redis)
 - [ ] Implement WebSocket for live updates
 - [ ] Add authentication and rate limiting

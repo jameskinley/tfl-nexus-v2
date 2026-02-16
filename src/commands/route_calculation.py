@@ -1,15 +1,20 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from graph.graph_manager import GraphManager
+from graph.routing_strategies import get_strategy, list_available_strategies
 from data import db_models
+from data.disruption_analyzer import DisruptionPredictor
+from commands.crowding_polling import CrowdingPollingCommand
 from difflib import get_close_matches
 from typing import Optional
+from datetime import datetime
 import logging
 
 
 class RouteCalculationCommand:
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: Session, routing_mode: str = 'fastest'):
         self.db_session = db_session
+        self.routing_mode = routing_mode
         self.logger = logging.getLogger("route_calculation")
 
     def find_closest_station(
@@ -41,12 +46,12 @@ class RouteCalculationCommand:
         
         return None
 
-    def calculate_route(self, from_location: str, to_location: str, time: str) -> dict:
+    def calculate_route(self, from_location: str, to_location: str, time: str, alternatives: bool = False) -> dict:
         graph_manager = GraphManager()
         graph_manager.build_graph_from_db_with_disruptions(self.db_session)
         
         self.logger.info(f"Graph has {graph_manager.graph.number_of_nodes()} nodes")
-        self.logger.info(f"Finding route from '{from_location}' to '{to_location}' at time {time}")
+        self.logger.info(f"Finding route from '{from_location}' to '{to_location}' at time {time} using {self.routing_mode} mode")
         
         from_station = self.find_closest_station(from_location, graph_manager=graph_manager)
         
@@ -71,8 +76,61 @@ class RouteCalculationCommand:
                 detail="Origin and destination stations are the same"
             )
         
+        # Prepare routing strategy and context
         try:
-            path = graph_manager.route_time_only(from_station.id, to_station.id, time)
+            strategy = get_strategy(self.routing_mode)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        # Build context for strategy
+        context = {
+            'current_time': datetime.strptime(time, "%H:%M") if time else datetime.now(),
+            'crowding_data': {},
+            'user_preferences': {},
+            'predictor': None
+        }
+        
+        # Apply fragility scores for robust/ml_hybrid modes
+        if self.routing_mode in ['robust', 'ml_hybrid']:
+            predictor = DisruptionPredictor(self.db_session)
+            context['predictor'] = predictor
+            graph_manager.apply_fragility_scores(self.db_session, predictor)
+        
+        # Apply crowding penalties for low_crowding/ml_hybrid modes
+        if self.routing_mode in ['low_crowding', 'ml_hybrid']:
+            crowding_command = CrowdingPollingCommand(self.db_session)
+            recent_crowding = crowding_command.get_recent_crowding(minutes=30)
+            
+            # Convert to format expected by graph manager
+            crowding_data = {}
+            for record in recent_crowding:
+                if record.station_id not in crowding_data:
+                    crowding_data[record.station_id] = {}
+                if record.line_id not in crowding_data[record.station_id]:
+                    crowding_data[record.station_id][record.line_id] = []
+                
+                crowding_data[record.station_id][record.line_id].append({
+                    'crowding_level': record.crowding_level,
+                    'capacity_percentage': record.capacity_percentage or 0.0,
+                    'time_slice': record.time_slice or 'unknown'
+                })
+            
+            context['crowding_data'] = crowding_data
+            graph_manager.apply_crowding_penalties(crowding_data)
+        
+        # Calculate route using strategy
+        try:
+            if self.routing_mode == 'fastest':
+                # Use existing time-only routing for fastest mode
+                path = graph_manager.route_time_only(from_station.id, to_station.id, time)
+            else:
+                # Use strategy-based routing
+                path = graph_manager.route_with_strategy(
+                    from_station.id,
+                    to_station.id,
+                    strategy,
+                    context
+                )
         except Exception as e:
             if "not in" in str(e) or "NetworkXNoPath" in str(type(e).__name__):
                 raise HTTPException(
@@ -116,8 +174,9 @@ class RouteCalculationCommand:
                 "disrupted": segment_disrupted
             })
         
-        return {
+        result = {
             "status": "success",
+            "routing_mode": self.routing_mode,
             "from": {
                 "query": from_location,
                 "matched": from_station.name,
@@ -134,3 +193,35 @@ class RouteCalculationCommand:
             "current_time": time,
             "has_disruptions": has_disruptions
         }
+        
+        # Add alternatives if requested
+        if alternatives:
+            result['alternatives'] = self._calculate_alternatives(
+                from_station, to_station, time, graph_manager
+            )
+        
+        return result
+    
+    def _calculate_alternatives(self, from_station, to_station, time, graph_manager):
+        """Calculate alternative routes using different strategies."""
+        alternatives = []
+        
+        # Try other routing modes
+        other_modes = ['fastest', 'robust', 'low_crowding']
+        if self.routing_mode in other_modes:
+            other_modes.remove(self.routing_mode)
+        
+        for mode in other_modes[:2]:  # Limit to 2 alternatives
+            try:
+                alt_command = RouteCalculationCommand(self.db_session, routing_mode=mode)
+                alt_result = alt_command.calculate_route(from_station.name, to_station.name, time, alternatives=False)
+                alternatives.append({
+                    'mode': mode,
+                    'total_time_minutes': alt_result['total_time_minutes'],
+                    'total_stations': alt_result['total_stations'],
+                    'has_disruptions': alt_result['has_disruptions']
+                })
+            except Exception as e:
+                self.logger.warning(f"Failed to calculate {mode} alternative: {e}")
+        
+        return alternatives

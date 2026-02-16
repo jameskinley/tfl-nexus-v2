@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from data import db_models
 from logging import getLogger
 from datetime import datetime, time
+from typing import Dict, Any, Optional
+from .routing_strategies import RoutingStrategy
 
 logger = getLogger(__name__)
 
@@ -65,18 +67,15 @@ class GraphManager:
             session: Active SQLAlchemy session
         """
         logger.info("Building graph from database...")
-        
-        # Get all routes with their station intervals
+
         routes = session.query(db_models.Route).all()
         
         node_count = 0
         edge_count = 0
         
         for route in routes:
-            # Get intervals ordered by ordinal (position in route)
             intervals = sorted(route.station_intervals, key=lambda x: x.ordinal)
             
-            # Add nodes for all stations in this route
             for interval in intervals:
                 station = interval.station
                 if not station:
@@ -94,14 +93,10 @@ class GraphManager:
                         lon=station.lon
                     )
                     node_count += 1
-                    if station.name.startswith("Chadwell"):
-                        logger.info(f"Added node for Chadwell Heath Station with ID {station.id}")
             
-            # Need at least 2 stations to create edges
             if len(intervals) < 2:
                 continue
-            
-            # Get schedules for this route to store time-dependent travel times
+
             schedule_times = {}
             for schedule in route.schedules:
                 schedule_times[schedule.name] = {
@@ -117,47 +112,41 @@ class GraphManager:
                         'frequency_max': period.frequency_max
                     })
             
-            # Create edges between consecutive stations
             for i in range(len(intervals) - 1):
                 current_interval = intervals[i]
                 next_interval = intervals[i + 1]
-                
-                # Safety check: ensure both stations are loaded
+
                 if not current_interval.station or not next_interval.station:
-                    logger.warning(f"Skipping edge creation - station not loaded")
+                    logger.warning(f"Skipping edge creation: station not loaded")
                     continue
                 
                 station_a = current_interval.station.id
                 station_b = next_interval.station.id
                 
-                # Calculate base time between stations
                 time_distance = 0.0
                 if next_interval.time_to_arrival and current_interval.time_to_arrival:
                     time_distance = next_interval.time_to_arrival - current_interval.time_to_arrival
                 elif next_interval.time_to_arrival:
                     time_distance = next_interval.time_to_arrival
-                
-                # Add or update edge
+
                 if self.graph.has_edge(station_a, station_b):
-                    # Edge exists, update if this route has better timing
                     existing_time = self.graph[station_a][station_b].get('base_time', float('inf'))
                     if time_distance < existing_time and time_distance > 0:
                         self.graph[station_a][station_b]['base_time'] = time_distance
-                        self.graph[station_a][station_b]['time_distance'] = time_distance  # Default weight
+                        self.graph[station_a][station_b]['time_distance'] = time_distance
                         self.graph[station_a][station_b]['line'] = route.line_id
                         self.graph[station_a][station_b]['mode'] = route.line.mode_name
                         self.graph[station_a][station_b]['schedules'] = schedule_times
                 else:
-                    # New edge
                     self.graph.add_edge(
                         station_a,
                         station_b,
                         base_time=time_distance if time_distance > 0 else 1.0,
-                        time_distance=time_distance if time_distance > 0 else 1.0,  # Default weight
-                        fragility=0.0,  # Default fragility, can be updated later
+                        time_distance=time_distance if time_distance > 0 else 1.0,
+                        fragility=0.0,
                         line=route.line_id,
                         mode=route.line.mode_name,
-                        schedules=schedule_times  # Store schedule info for dynamic timing
+                        schedules=schedule_times
                     )
                     edge_count += 1
         
@@ -183,27 +172,22 @@ class GraphManager:
         base_time = edge_data.get('base_time', 1.0)
         schedules = edge_data.get('schedules', {})
         
-        # Find active schedule and period for current time
         wait_time = 0.0
-        for schedule_name, schedule_data in schedules.items():
-            # Check if current time is within service hours
+        for _, schedule_data in schedules.items():
             first = schedule_data.get('first_journey', 0)
             last = schedule_data.get('last_journey', 24 * 60)
             
             if first <= current_time <= last:
-                # Find active period
                 for period in schedule_data.get('periods', []):
                     if period['from_time'] <= current_time <= period['to_time']:
-                        # Add average wait time (half the frequency)
                         freq_min = period.get('frequency_min', 0)
                         freq_max = period.get('frequency_max', 0)
                         if freq_min and freq_max:
                             avg_frequency = (freq_min + freq_max) / 2
-                            wait_time = avg_frequency / 2  # Average wait time
+                            wait_time = avg_frequency / 2
                         break
                 break
         
-        # Total time = base travel time + average wait time
         return base_time + wait_time
 
     def add_edge(self, stop_a: str, stop_b: str, time_distance: float = 0.0, 
@@ -245,9 +229,7 @@ class GraphManager:
             List of station IDs representing the path
         """
         if current_time is not None:
-            # Convert to minutes from midnight
             time_minutes = self.time_to_minutes(current_time)
-            # Use dynamic weights based on current time
             weight_func = lambda u, v, d: self.get_dynamic_weight(u, v, time_minutes)
             return nx.shortest_path(self.graph, source=start_stop, target=end_stop, weight=weight_func)
         else:
@@ -316,13 +298,16 @@ class GraphManager:
         for disruption in active_disruptions:
             line_id = disruption.line_id
             category = disruption.category.lower()
+            description = (disruption.description or "").lower()
+            summary = (disruption.summary or "").lower()
+            full_text = f"{category} {description} {summary}"
             
-            if "suspend" in category or "closure" in category:
+            if "suspend" in full_text or "closure" in full_text:
                 edges_to_remove = [
                     (u, v) for u, v, data in self.graph.edges(data=True)
                     if data.get('line') == line_id
                 ]
-                
+            
                 if disruption.affected_stops:
                     affected_station_ids = {stop.station_id for stop in disruption.affected_stops}
                     edges_to_remove = [
@@ -335,14 +320,14 @@ class GraphManager:
                         self.graph.remove_edge(u, v)
                         disrupted_edges.append((u, v, line_id, "suspended"))
                         
-            elif "delay" in category:
-                delay_factor = 1.5 if "severe" in category else 1.25
+            elif "delay" in full_text:
+                delay_factor = 1.5 if "severe" in full_text else 1.25
                 
                 edges_to_modify = [
                     (u, v) for u, v, data in self.graph.edges(data=True)
                     if data.get('line') == line_id
                 ]
-                
+
                 if disruption.affected_stops:
                     affected_station_ids = {stop.station_id for stop in disruption.affected_stops}
                     edges_to_modify = [
@@ -360,6 +345,168 @@ class GraphManager:
         
         logger.info(f"Applied {len(active_disruptions)} disruptions, affecting {len(disrupted_edges)} edges")
         return disrupted_edges
+
+    def apply_fragility_scores(self, session: Session, predictor=None):
+        """
+        Apply disruption fragility scores to all edges in the graph.
+        
+        Uses historical disruption data to calculate reliability scores
+        for each route segment.
+        
+        Args:
+            session: Database session for querying disruption history
+            predictor: Optional DisruptionPredictor instance (creates one if None)
+        """
+        from data.disruption_analyzer import DisruptionPredictor
+        
+        if predictor is None:
+            predictor = DisruptionPredictor(session)
+        
+        # Calculate scores
+        predictor.calculate_line_reliability_scores()
+        predictor.calculate_station_reliability_scores()
+        
+        # Apply to all edges
+        edges_updated = 0
+        for u, v, data in self.graph.edges(data=True):
+            line_id = data.get('line', '')
+            
+            # Calculate fragility for this edge
+            fragility = predictor.predict_edge_fragility(
+                line_id=line_id,
+                from_station_id=u,
+                to_station_id=v,
+                current_time=None  # Use current time
+            )
+            
+            data['fragility'] = fragility
+            edges_updated += 1
+        
+        logger.info(f"Applied fragility scores to {edges_updated} edges")
+        return edges_updated
+
+    def apply_crowding_penalties(self, crowding_data: Dict[str, Dict[str, list]]):
+        """
+        Apply crowding penalties to edges based on station crowding data.
+        
+        Args:
+            crowding_data: Dictionary mapping station_id -> line_id -> crowding metrics list
+                Format: {
+                    station_id: {
+                        line_id: [{
+                            'crowding_level': str,
+                            'capacity_percentage': float,
+                            'time_slice': str
+                        }]
+                    }
+                }
+        """
+        edges_updated = 0
+        
+        for u, v, data in self.graph.edges(data=True):
+            line_id = data.get('line', '')
+            
+            # Check crowding for both stations on this line
+            u_crowding = self._get_station_crowding_penalty(u, line_id, crowding_data)
+            v_crowding = self._get_station_crowding_penalty(v, line_id, crowding_data)
+            
+            # Average penalty for the edge
+            crowding_penalty = (u_crowding + v_crowding) / 2.0
+            
+            data['crowding_penalty'] = crowding_penalty
+            edges_updated += 1
+        
+        logger.info(f"Applied crowding penalties to {edges_updated} edges")
+        return edges_updated
+
+    def _get_station_crowding_penalty(
+        self,
+        station_id: str,
+        line_id: str,
+        crowding_data: Dict[str, Dict[str, list]]
+    ) -> float:
+        """
+        Calculate crowding penalty for a station-line combination.
+        
+        Returns:
+            Penalty value 0.0-1.0 (higher = more crowded)
+        """
+        # Check if we have crowding data for this station
+        if station_id not in crowding_data:
+            return 0.0
+        
+        station_data = crowding_data[station_id]
+        
+        # Check if we have data for this line at this station
+        if line_id not in station_data:
+            return 0.0
+        
+        line_crowding = station_data[line_id]
+        
+        # Average crowding across all time slices
+        if not line_crowding:
+            return 0.0
+        
+        total_capacity = sum(c.get('capacity_percentage', 0) for c in line_crowding)
+        avg_capacity = total_capacity / len(line_crowding)
+        
+        # Convert capacity percentage to penalty (0-1 scale)
+        # 0-50% capacity = low penalty
+        # 50-100% = moderate penalty
+        # >100% = high penalty
+        if avg_capacity <= 50:
+            penalty = avg_capacity / 100.0  # 0.0 to 0.5
+        elif avg_capacity <= 100:
+            penalty = 0.5 + (avg_capacity - 50) / 100.0  # 0.5 to 1.0
+        else:
+            penalty = min(1.0, 1.0 + (avg_capacity - 100) / 200.0)  # 1.0+ capped
+        
+        return penalty
+
+    def route_with_strategy(
+        self,
+        start_stop: str,
+        end_stop: str,
+        strategy: RoutingStrategy,
+        context: Dict[str, Any]
+    ) -> list:
+        """
+        Find route using a pluggable routing strategy.
+        
+        Args:
+            start_stop: Source station ID
+            end_stop: Destination station ID
+            strategy: RoutingStrategy instance defining optimization objective
+            context: Context dictionary with:
+                - 'current_time': datetime object
+                - 'crowding_data': Station crowding metrics
+                - 'user_preferences': User weightings
+                - 'predictor': DisruptionPredictor instance
+                
+        Returns:
+            List of station IDs representing the path
+        """
+        # Apply strategy weights to all edges
+        for u, v, data in self.graph.edges(data=True):
+            weight = strategy.calculate_edge_weight(data, context)
+            data['strategy_weight'] = weight
+        
+        # Find shortest path using strategy weights
+        try:
+            path = nx.shortest_path(
+                self.graph,
+                source=start_stop,
+                target=end_stop,
+                weight='strategy_weight'
+            )
+            logger.info(f"Route found using {strategy.name} strategy: {len(path)} stops")
+            return path
+        except nx.NetworkXNoPath:
+            logger.error(f"No path found between {start_stop} and {end_stop}")
+            raise
+        except nx.NodeNotFound as e:
+            logger.error(f"Station not found in graph: {e}")
+            raise
 
     def build_graph_from_db_with_disruptions(self, session: Session):
         """

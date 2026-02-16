@@ -385,6 +385,89 @@ class TflClient:
         
         return disruptions
 
+    def get_line_crowding(self, line_ids: list[str]) -> dict:
+        """
+        Fetch crowding data for specified lines
+        
+        Args:
+            line_ids: List of line identifiers to fetch crowding data for
+            
+        Returns:
+            Dictionary mapping station_id -> line_id -> crowding metrics
+            Format: {
+                station_id: {
+                    line_id: {
+                        'crowding_level': str,
+                        'capacity_percentage': float,
+                        'time_slice': str
+                    }
+                }
+            }
+        """
+        crowding_data = {}
+        
+        # Fetch line data with crowding information
+        URL = f"/Line/{','.join(line_ids)}"
+        
+        try:
+            response = self._make_request("GET", URL)
+            
+            # Handle single line response (dict) vs multiple lines (list)
+            if isinstance(response, dict):
+                response = [response]
+            
+            for line in response:
+                line_id = line.get("id")
+                
+                # Check if crowding data exists
+                if "crowding" not in line or not line["crowding"]:
+                    continue
+                
+                crowding = line["crowding"]
+                
+                # Process trainLoadings (station-level crowding by line)
+                if "trainLoadings" in crowding and crowding["trainLoadings"]:
+                    for loading in crowding["trainLoadings"]:
+                        naptan_to = loading.get("naptanTo")
+                        if not naptan_to:
+                            continue
+                        
+                        # Initialize nested dict structure
+                        if naptan_to not in crowding_data:
+                            crowding_data[naptan_to] = {}
+                        
+                        if line_id not in crowding_data[naptan_to]:
+                            crowding_data[naptan_to][line_id] = []
+                        
+                        # Categorize crowding level based on value (0-6 scale from TfL)
+                        value = loading.get("value", 0)
+                        if value <= 1:
+                            level = "low"
+                        elif value <= 3:
+                            level = "moderate"
+                        elif value <= 5:
+                            level = "high"
+                        else:
+                            level = "very_high"
+                        
+                        crowding_data[naptan_to][line_id].append({
+                            "crowding_level": level,
+                            "capacity_percentage": (value / 6.0) * 100,  # Normalize to percentage
+                            "time_slice": loading.get("timeSlice", "unknown"),
+                            "direction": loading.get("direction", "unknown")
+                        })
+                
+                # Process passengerFlows (station-level regardless of line)
+                if "passengerFlows" in crowding and crowding["passengerFlows"]:
+                    # This is aggregate station data, we'll skip for now
+                    # as we're focusing on line-specific crowding
+                    pass
+                    
+        except Exception as e:
+            self._logger.error(f"Failed to fetch crowding data: {e}")
+        
+        return crowding_data
+
 
     def _make_request(self, method: str, endpoint: str):
         return request(method, self.base_url + endpoint, params={"app_key": self.app_key}).json()
