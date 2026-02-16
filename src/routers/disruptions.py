@@ -4,10 +4,49 @@ from data.database import get_db
 from data import db_models
 import logging
 
-router = APIRouter(prefix="/disruptions", tags=["disruptions"])
+router = APIRouter(prefix="/disruptions", tags=["Disruptions"])
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="Get All Active Disruptions",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved active disruptions",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "disruptions": [
+                            {
+                                "id": 1,
+                                "line_id": "central",
+                                "type": "lineInfo",
+                                "category": "RealTime",
+                                "category_description": "Real-time information",
+                                "summary": "Minor delays",
+                                "description": "Central Line: Minor delays due to a faulty train",
+                                "additional_info": "Tickets will be accepted on local buses",
+                                "created": "2026-02-16T10:30:00",
+                                "last_update": "2026-02-16T10:45:00",
+                                "affected_stops_count": 5
+                            }
+                        ],
+                        "count": 1
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Database connection failed"}
+                }
+            }
+        }
+    }
+)
 async def get_all_active_disruptions(db: Session = Depends(get_db)):
     """
     Get all currently active disruptions from the database.
@@ -49,7 +88,42 @@ async def get_all_active_disruptions(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{line_id}")
+@router.get(
+    "/{line_id}",
+    summary="Get Disruptions by Line",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved line disruptions",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "line_id": "central",
+                        "disruptions": [
+                            {
+                                "id": 1,
+                                "type": "lineInfo",
+                                "category": "RealTime",
+                                "summary": "Minor delays",
+                                "description": "Central Line: Minor delays due to a faulty train",
+                                "last_update": "2026-02-16T10:45:00"
+                            }
+                        ],
+                        "count": 1
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Database query error"}
+                }
+            }
+        }
+    }
+)
 async def get_disruptions_by_line(line_id: str, db: Session = Depends(get_db)):
     """
     Get active disruptions for a specific line.

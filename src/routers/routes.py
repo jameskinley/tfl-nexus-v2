@@ -7,10 +7,47 @@ from datetime import datetime
 from typing import Optional
 import logging
 
-router = APIRouter(prefix="/routes", tags=["routes"])
+router = APIRouter(prefix="/routes", tags=["Routing"])
 
 
-@router.get("/strategies")
+@router.get(
+    "/strategies",
+    summary="List Available Routing Strategies",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved routing strategies",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "strategies": [
+                            {
+                                "name": "fastest",
+                                "description": "Minimize travel time",
+                                "priority": "speed"
+                            },
+                            {
+                                "name": "robust",
+                                "description": "Prefer reliable routes avoiding disruption-prone lines",
+                                "priority": "reliability"
+                            },
+                            {
+                                "name": "low_crowding",
+                                "description": "Avoid crowded stations and lines",
+                                "priority": "comfort"
+                            },
+                            {
+                                "name": "ml_hybrid",
+                                "description": "Balanced optimization using machine learning",
+                                "priority": "balanced"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_strategies():
     """
     List available routing strategies.
@@ -23,7 +60,81 @@ async def get_strategies():
     }
 
 
-@router.get("/{from_location}/{to_location}")
+@router.get(
+    "/{from_location}/{to_location}",
+    summary="Calculate Optimal Route",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully calculated route",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "routing_mode": "fastest",
+                        "from_station": "King's Cross St. Pancras",
+                        "to_station": "Oxford Circus",
+                        "matched_from": "Kings Cross St Pancras Underground Station",
+                        "matched_to": "Oxford Circus Underground Station",
+                        "route": [
+                            {
+                                "station": "King's Cross St. Pancras",
+                                "line": "victoria",
+                                "arrival_time": "10:30",
+                                "departure_time": "10:30",
+                                "wait_time_minutes": 0
+                            },
+                            {
+                                "station": "Oxford Circus",
+                                "line": "victoria",
+                                "arrival_time": "10:38",
+                                "departure_time": "10:38",
+                                "wait_time_minutes": 0
+                            }
+                        ],
+                        "total_time_minutes": 8,
+                        "total_stops": 2,
+                        "changes": 0,
+                        "has_disruptions": False,
+                        "disruption_warnings": []
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request parameters",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_mode": {
+                            "summary": "Invalid routing mode",
+                            "value": {"detail": "Invalid routing mode. Use: fastest, robust, low_crowding, or ml_hybrid"}
+                        },
+                        "no_route": {
+                            "summary": "No route exists",
+                            "value": {"detail": "No route found between stations"}
+                        }
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Station not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Station 'invalid' not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Route calculation failed"}
+                }
+            }
+        }
+    }
+)
 async def calculate_route(
     from_location: str, 
     to_location: str, 

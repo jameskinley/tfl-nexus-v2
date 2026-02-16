@@ -16,7 +16,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
 class CreateReportRequest(BaseModel):
@@ -51,7 +51,43 @@ class ReportListItem(BaseModel):
     summary: str
 
 
-@router.post("", response_model=dict)
+@router.post(
+    "",
+    response_model=dict,
+    summary="Generate Network Report",
+    status_code=201,
+    responses={
+        201: {
+            "description": "Report successfully generated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "timestamp": "2026-02-16T10:30:00",
+                        "report_type": "snapshot",
+                        "summary": "Network Status: 8 of 11 lines operating with good service. 3 lines experiencing minor delays. Overall network health is good with minimal disruption impact."
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request parameters",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Invalid report_type. Use 'snapshot' or 'daily_summary'"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to generate report"}
+                }
+            }
+        }
+    }
+)
 async def create_report(
     request: CreateReportRequest,
     db: Session = Depends(get_db)
@@ -90,7 +126,53 @@ async def create_report(
         raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
 
 
-@router.get("", response_model=list[ReportListItem])
+@router.get(
+    "",
+    response_model=list[ReportListItem],
+    summary="List Network Reports",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved reports list",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "timestamp": "2026-02-16T10:30:00",
+                            "report_type": "snapshot",
+                            "total_disruptions": 3,
+                            "active_lines_count": 11,
+                            "affected_lines_count": 3,
+                            "graph_connectivity_score": 0.95,
+                            "average_reliability_score": 0.87,
+                            "summary": "Network Status: 8 of 11 lines operating with good service."
+                        },
+                        {
+                            "id": 2,
+                            "timestamp": "2026-02-15T10:30:00",
+                            "report_type": "daily_summary",
+                            "total_disruptions": 5,
+                            "active_lines_count": 11,
+                            "affected_lines_count": 4,
+                            "graph_connectivity_score": 0.92,
+                            "average_reliability_score": 0.83,
+                            "summary": "Network Status: 7 of 11 lines operating with good service."
+                        }
+                    ]
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to list reports"}
+                }
+            }
+        }
+    }
+)
 async def list_reports(
     start_date: Optional[str] = Query(None, description="ISO format start date"),
     end_date: Optional[str] = Query(None, description="ISO format end date"),
@@ -133,7 +215,55 @@ async def list_reports(
         raise HTTPException(status_code=500, detail=f"Failed to list reports: {str(e)}")
 
 
-@router.get("/{report_id}", response_model=dict)
+@router.get(
+    "/{report_id}",
+    response_model=dict,
+    summary="Get Report by ID",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved report",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "timestamp": "2026-02-16T10:30:00",
+                        "report_type": "snapshot",
+                        "total_disruptions": 3,
+                        "active_lines_count": 11,
+                        "affected_lines_count": 3,
+                        "graph_connectivity_score": 0.95,
+                        "average_reliability_score": 0.87,
+                        "summary": "Network Status: 8 of 11 lines operating with good service.",
+                        "disruptions": [
+                            {
+                                "line_id": "central",
+                                "category": "RealTime",
+                                "summary": "Minor delays"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Report not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Report 999 not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to get report"}
+                }
+            }
+        }
+    }
+)
 async def get_report(
     report_id: int,
     db: Session = Depends(get_db)
@@ -167,7 +297,43 @@ async def get_report(
         raise HTTPException(status_code=500, detail=f"Failed to get report: {str(e)}")
 
 
-@router.put("/{report_id}", response_model=dict)
+@router.put(
+    "/{report_id}",
+    response_model=dict,
+    summary="Update Network Report",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully updated report",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "timestamp": "2026-02-16T10:30:00",
+                        "report_type": "daily_summary",
+                        "summary": "Updated network summary with latest information."
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Report not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Report 999 not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to update report"}
+                }
+            }
+        }
+    }
+)
 async def update_report(
     report_id: int,
     request: UpdateReportRequest,
@@ -215,7 +381,38 @@ async def update_report(
         raise HTTPException(status_code=500, detail=f"Failed to update report: {str(e)}")
 
 
-@router.delete("/{report_id}", response_model=dict)
+@router.delete(
+    "/{report_id}",
+    response_model=dict,
+    summary="Delete Network Report",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully deleted report",
+            "content": {
+                "application/json": {
+                    "example": {"message": "Report 1 deleted successfully"}
+                }
+            }
+        },
+        404: {
+            "description": "Report not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Report 999 not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to delete report"}
+                }
+            }
+        }
+    }
+)
 async def delete_report(
     report_id: int,
     db: Session = Depends(get_db)

@@ -5,10 +5,38 @@ from data.database import get_db
 from commands.graph_operations import GraphOperationsCommand
 import logging
 
-router = APIRouter(prefix="/graph", tags=["graph"])
+router = APIRouter(prefix="/graph", tags=["Graph"])
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    summary="Get Graph Statistics",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved graph statistics",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "nodes": 250,
+                        "edges": 450,
+                        "average_degree": 3.6,
+                        "connected_components": 1,
+                        "network_health": "good"
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error - graph building failed",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to build graph from database"}
+                }
+            }
+        }
+    }
+)
 async def get_graph_statistics(db: Session = Depends(get_db)):
     """
     Build the transport network graph from database and return statistics.
@@ -34,7 +62,30 @@ async def get_graph_statistics(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/visualize")
+@router.get(
+    "/visualize",
+    summary="Visualize Transport Network Graph",
+    status_code=200,
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "Successfully generated graph visualization",
+            "content": {
+                "image/png": {
+                    "example": "Binary PNG image data"
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error - visualization failed",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to generate visualization"}
+                }
+            }
+        }
+    }
+)
 async def visualize_graph(db: Session = Depends(get_db)):
     """
     Generate and return a visualization of the transport network graph as a PNG image.

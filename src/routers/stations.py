@@ -4,10 +4,59 @@ from data.database import get_db
 from commands.station_operations import StationOperationsCommand
 import logging
 
-router = APIRouter(prefix="/stations", tags=["stations"])
+router = APIRouter(prefix="/stations", tags=["Stations"])
 
 
-@router.get("/search")
+@router.get(
+    "/search",
+    summary="Search Stations",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved matching stations",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "query": "king",
+                        "stations": [
+                            {
+                                "id": 1,
+                                "name": "King's Cross St. Pancras",
+                                "latitude": 51.5308,
+                                "longitude": -0.1238,
+                                "modes": ["tube", "national-rail"]
+                            },
+                            {
+                                "id": 2,
+                                "name": "Kingsbury",
+                                "latitude": 51.5843,
+                                "longitude": -0.2786,
+                                "modes": ["tube"]
+                            }
+                        ],
+                        "count": 2
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request parameters",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Query string 'q' is required"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Database query failed"}
+                }
+            }
+        }
+    }
+)
 async def search_stations(q: str, limit: int = 10, db: Session = Depends(get_db)):
     """
     Search for stations by name using case-insensitive partial matching.
@@ -36,7 +85,66 @@ async def search_stations(q: str, limit: int = 10, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{station_name}/graph-status")
+@router.get(
+    "/{station_name}/graph-status",
+    summary="Check Station Graph Status",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved station graph status",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "in_graph": {
+                            "summary": "Station is in routing graph",
+                            "value": {
+                                "station_name": "King's Cross St. Pancras",
+                                "matched_station": "Kings Cross St Pancras Underground Station",
+                                "in_graph": True,
+                                "connected_stations": [
+                                    "Euston",
+                                    "Angel",
+                                    "Caledonian Road"
+                                ],
+                                "available_lines": ["northern", "piccadilly", "victoria", "circle"],
+                                "transport_modes": ["tube"]
+                            }
+                        },
+                        "not_in_graph": {
+                            "summary": "Station not in routing graph",
+                            "value": {
+                                "station_name": "Example Station",
+                                "matched_station": "Example Station",
+                                "in_graph": False,
+                                "reason": "Station not included in routing network",
+                                "suggestions": [
+                                    "Nearby Station 1",
+                                    "Nearby Station 2"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Station not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "No station found matching 'invalid'"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to build graph"}
+                }
+            }
+        }
+    }
+)
 async def check_station_in_graph(station_name: str, db: Session = Depends(get_db)):
     """
     Check if a station exists in the routing graph and get connectivity information.

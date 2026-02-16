@@ -4,14 +4,43 @@ from data.database import get_db
 from commands.ingestion_operations import IngestionOperationsCommand
 import logging
 
-router = APIRouter(prefix="/ingestion", tags=["ingestion"])
+router = APIRouter(prefix="/ingestion", tags=["Data Ingestion"])
 
 ingestion_command = IngestionOperationsCommand()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
-@router.post("/start")
+@router.post(
+    "/start",
+    summary="Start Data Ingestion",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Ingestion started or already running",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "started": {
+                            "summary": "Ingestion started successfully",
+                            "value": {
+                                "status": "started",
+                                "message": "Data ingestion started in background. Check /ingestion/status for progress."
+                            }
+                        },
+                        "already_running": {
+                            "summary": "Ingestion already in progress",
+                            "value": {
+                                "status": "already_running",
+                                "message": "Ingestion is already in progress. Check /ingestion/status for details."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def start_data_ingestion(background_tasks: BackgroundTasks):
     """
     Start TfL data ingestion as a background task.
@@ -38,7 +67,52 @@ async def start_data_ingestion(background_tasks: BackgroundTasks):
     }
 
 
-@router.get("/status")
+@router.get(
+    "/status",
+    summary="Get Ingestion Status",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Current ingestion status",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "running": {
+                            "summary": "Ingestion in progress",
+                            "value": {
+                                "is_running": True,
+                                "started_at": "2026-02-16T10:30:00",
+                                "completed_at": None,
+                                "status": "Ingesting lines and routes...",
+                                "error": None
+                            }
+                        },
+                        "completed": {
+                            "summary": "Ingestion completed",
+                            "value": {
+                                "is_running": False,
+                                "started_at": "2026-02-16T10:30:00",
+                                "completed_at": "2026-02-16T10:35:00",
+                                "status": "Ingestion completed successfully",
+                                "error": None
+                            }
+                        },
+                        "error": {
+                            "summary": "Ingestion failed",
+                            "value": {
+                                "is_running": False,
+                                "started_at": "2026-02-16T10:30:00",
+                                "completed_at": "2026-02-16T10:31:00",
+                                "status": "Ingestion failed",
+                                "error": "Connection to TfL API failed"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_ingestion_status():
     """
     Get the current status of the data ingestion process.

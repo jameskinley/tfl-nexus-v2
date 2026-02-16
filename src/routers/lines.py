@@ -4,10 +4,48 @@ from data.database import get_db
 from commands.line_operations import LineOperationsCommand
 import logging
 
-router = APIRouter(prefix="/lines", tags=["lines"])
+router = APIRouter(prefix="/lines", tags=["Lines"])
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="Get All Lines",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved all lines",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "lines": [
+                            {
+                                "id": "central",
+                                "name": "Central",
+                                "mode": "tube",
+                                "created": "2026-02-16T10:30:00"
+                            },
+                            {
+                                "id": "northern",
+                                "name": "Northern",
+                                "mode": "tube",
+                                "created": "2026-02-16T10:30:00"
+                            }
+                        ],
+                        "count": 2
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Database query failed"}
+                }
+            }
+        }
+    }
+)
 async def get_all_lines(db: Session = Depends(get_db)):
     """
     Get all available transport lines from the database.
@@ -30,7 +68,49 @@ async def get_all_lines(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{line_id}")
+@router.get(
+    "/{line_id}",
+    summary="Get Line Details",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved line details",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "line_id": "central",
+                        "name": "Central",
+                        "mode": "tube",
+                        "routes": [
+                            {
+                                "id": 1,
+                                "name": "Ealing Broadway - Epping",
+                                "direction": "outbound"
+                            }
+                        ],
+                        "stations_count": 49
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Line not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Line 'invalid' not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Database query failed"}
+                }
+            }
+        }
+    }
+)
 async def get_line_details(line_id: str, db: Session = Depends(get_db)):
     """
     Get detailed information for a specific transport line.
@@ -58,7 +138,49 @@ async def get_line_details(line_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{line_id}/disruptions")
+@router.get(
+    "/{line_id}/disruptions",
+    summary="Get Live Line Disruptions",
+    status_code=200,
+    responses={
+        200: {
+            "description": "Successfully retrieved live disruptions from TfL API",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "line_id": "central",
+                        "line_name": "Central",
+                        "disruptions": [
+                            {
+                                "category": "RealTime",
+                                "type": "lineInfo",
+                                "severity": "Minor Delays",
+                                "description": "Central Line: Minor delays due to a faulty train"
+                            }
+                        ],
+                        "count": 1
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Line not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Line 'invalid' not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "TfL API connection failed"}
+                }
+            }
+        }
+    }
+)
 async def get_line_disruptions(line_id: str, db: Session = Depends(get_db)):
     """
     Get live disruption information for a specific line from TfL API.
