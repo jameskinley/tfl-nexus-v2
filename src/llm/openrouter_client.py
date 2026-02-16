@@ -26,14 +26,16 @@ class OpenRouterClient:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant that generates concise summaries of transit reports. "
+                    "content": "You are a helpful assistant that generates concise summaries of transit network reports. "
                                "Focus on key insights and actionable information. "
-                               "Output should be clear and easy to understand, in plaintext format, and no more than 100 words."
-                               "It should follow a report-style format, with a brief headline followed by bullet points of key details."
+                               "Output should be clear and easy to understand, in plaintext format, and no more than 150 words. "
+                               "It should follow a report-style format, with a brief headline followed by bullet points of key details. "
+                               "Pay special attention to the 'disruption_details' field which contains specific information about each disruption, "
+                               "including summaries, descriptions, and affected lines."
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": f"Generate a transit network status report summary from this data:\n\n{prompt}"
                 }
             ]
         })

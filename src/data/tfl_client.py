@@ -360,18 +360,46 @@ class TflClient:
             if not line_ids:
                 line_ids = ["unknown"]
             
+            # Extract affected stops - try multiple fields
             affected_stop_ids = []
             if "affectedStops" in disruption and disruption["affectedStops"]:
                 for stop in disruption["affectedStops"]:
-                    if "id" in stop:
-                        affected_stop_ids.append(stop["id"])
+                    # Try multiple fields in order of preference
+                    stop_id = (
+                        stop.get("stationNaptan") or 
+                        stop.get("hubNaptanCode") or 
+                        stop.get("naptanId") or 
+                        stop.get("id")
+                    )
+                    if stop_id:
+                        affected_stop_ids.append(stop_id)
+            
+            # Also check routeSectionNaptanEntrySequence in affectedRoutes
+            if "affectedRoutes" in disruption and disruption["affectedRoutes"]:
+                for route in disruption["affectedRoutes"]:
+                    if "routeSectionNaptanEntrySequence" in route:
+                        for entry in route["routeSectionNaptanEntrySequence"]:
+                            if "stopPoint" in entry:
+                                stop_point = entry["stopPoint"]
+                                stop_id = (
+                                    stop_point.get("stationNaptan") or
+                                    stop_point.get("hubNaptanCode") or
+                                    stop_point.get("naptanId") or
+                                    stop_point.get("id")
+                                )
+                                if stop_id and stop_id not in affected_stop_ids:
+                                    affected_stop_ids.append(stop_id)
+            
+            # Use categoryDescription as primary category (e.g., "Minor Delays")
+            # Fall back to category if categoryDescription is empty
+            category = disruption.get("categoryDescription", "") or disruption.get("category", "")
             
             for line_id in line_ids:
                 delay = Delay(
-                    id=f"{disruption.get('category', 'unknown')}-{line_id}",
+                    id=f"{category or 'unknown'}-{line_id}-{disruption.get('created', '')}",
                     line_id=line_id,
                     type=disruption.get("type", ""),
-                    category=disruption.get("category", ""),
+                    category=category,
                     categoryDescription=disruption.get("categoryDescription", ""),
                     summary=disruption.get("summary", ""),
                     description=disruption.get("description", ""),

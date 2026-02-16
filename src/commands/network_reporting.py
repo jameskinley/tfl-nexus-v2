@@ -87,14 +87,25 @@ class NetworkReportingCommand:
             # 3. Disruption breakdown by category
             category_counts = {}
             affected_lines = set()
+            disruption_details = []
             
             for disruption in active_disruptions:
-                category = disruption.category or 'Unknown'
+                category = disruption.category_description or disruption.category or 'Unknown'
                 category_counts[category] = category_counts.get(category, 0) + 1
                 affected_lines.add(disruption.line_id)
+                
+                # Collect disruption details for LLM
+                disruption_details.append({
+                    'line_id': disruption.line_id,
+                    'category': category,
+                    'summary': disruption.summary or '',
+                    'description': disruption.description or '',
+                    'additional_info': disruption.additional_info or ''
+                })
             
             report_data['disruption_breakdown'] = category_counts
             report_data['affected_lines_count'] = len(affected_lines)
+            report_data['disruption_details'] = disruption_details
             
             # 4. Line statuses
             line_statuses = {}
@@ -367,13 +378,24 @@ class NetworkReportingCommand:
                 # 3. Disruption breakdown
                 category_counts = {}
                 affected_lines = set()
+                disruption_details = []
                 for disruption in active_disruptions:
-                    category = disruption.category or 'Unknown'
+                    category = disruption.category_description or disruption.category or 'Unknown'
                     category_counts[category] = category_counts.get(category, 0) + 1
                     affected_lines.add(disruption.line_id)
+                    
+                    # Collect disruption details for LLM
+                    disruption_details.append({
+                        'line_id': disruption.line_id,
+                        'category': category,
+                        'summary': disruption.summary or '',
+                        'description': disruption.description or '',
+                        'additional_info': disruption.additional_info or ''
+                    })
                 
                 report_data['disruption_breakdown'] = category_counts
                 report_data['affected_lines_count'] = len(affected_lines)
+                report_data['disruption_details'] = disruption_details
                 
                 # 4. Line statuses
                 line_statuses = {}

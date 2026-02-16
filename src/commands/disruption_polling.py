@@ -35,13 +35,13 @@ class DisruptionPollingCommand:
                 ).first()
                 
                 if existing:
-                    existing.last_update = delay.lastUpdate
-                    existing.summary = delay.summary
-                    existing.description = delay.description
-                    existing.additional_info = delay.additionalInfo
-                    existing.category = delay.category
-                    existing.category_description = delay.categoryDescription
-                    existing.is_active = True
+                    existing.last_update = delay.lastUpdate  # type: ignore
+                    existing.summary = delay.summary  # type: ignore
+                    existing.description = delay.description  # type: ignore
+                    existing.additional_info = delay.additionalInfo  # type: ignore
+                    existing.category = delay.category  # type: ignore
+                    existing.category_description = delay.categoryDescription  # type: ignore
+                    existing.is_active = True  # type: ignore
                     
                     db_session.query(db_models.DisruptedStop).filter(
                         db_models.DisruptedStop.disruption_id == delay.id
@@ -118,7 +118,7 @@ class DisruptionPollingCommand:
             resolved_count = 0
             for disruption in active_disruptions:
                 if disruption.id not in disruption_ids_seen:
-                    disruption.is_active = False
+                    disruption.is_active = False  # type: ignore
                     resolved_count += 1
             
             db_session.commit()
