@@ -17,7 +17,7 @@ class TflClient:
     
     Provides methods to fetch lines, routes, timetables, and stop points.
     """
-    
+
     def __init__(self):
         self.base_url = "https://api.tfl.gov.uk"
         self.app_key = os.getenv("TFL_PRIMARY_KEY")
@@ -280,7 +280,7 @@ class TflClient:
 
         lines = dict[str, Line]()
 
-        self._logger.debug(f"Received response from TFL API: {response}")
+        self._logger.info(f"Received response from TFL API: {response}")
 
         for res in response:
             line = Line(
@@ -313,6 +313,39 @@ class TflClient:
             disruptions.append(disruption_model)
 
         return disruptions
+    
+    def get_all_line_statuses(self, line_ids: list[str] = []) -> list[Delay]:
+
+        GOOD_SERVICE = 10
+
+        if len(line_ids) == 0:
+            return []
+
+        URL = f"/Line/{",".join(line_ids)}/Status"
+
+        response = self._make_request("GET", URL, {"detail": "true"})
+
+        for line in response:
+            line_id = line.get("id")
+
+            for line_status in line.get("lineStatuses", []):
+                if line_status.get("statusSeverity", GOOD_SERVICE) == GOOD_SERVICE:
+                    continue
+                
+                severity_code = line_status.get("statusSeverity")
+                description = line_status.get("statusSeverityDescription", "")
+
+                for validity_period in line_status.get("validityPeriods", []):
+                    from_date = validity_period.get("fromDate")
+                    to_date = validity_period.get("toDate", "")
+
+                disruption = line_status["disruption"]
+
+                for stop in disruption.get("affectedStops", []):
+                    stop_id = stop.get("id")
+                    # lookup stop in DB and create disruption for that stop - handle outside of client but just so we are aware
+                
+        return []
 
     def get_all_disruptions(self, modes: list[str] = []) -> list[Delay]:
         if len(modes) == 0:
@@ -322,7 +355,19 @@ class TflClient:
 
         response = self._make_request("GET", URL)
 
+        self._logger.info(f"Received response from TFL API: {response}")
+
         disruptions = []
+
+        for disruption in response:
+            type = disruption.get("type", "Unknown")
+            category = disruption.get("closureText", "Unknown")
+
+            if disruption.get("affectedStops") is [] or disruption.get("affectedRoutes") is []:
+                # no affected stops or routes indicates general disruption.
+                continue
+
+
         
         for disruption in response:
             line_ids = []
@@ -497,5 +542,5 @@ class TflClient:
         return crowding_data
 
 
-    def _make_request(self, method: str, endpoint: str):
-        return request(method, self.base_url + endpoint, params={"app_key": self.app_key}).json()
+    def _make_request(self, method: str, endpoint: str, params: dict[str, str] = {}):
+        return request(method, self.base_url + endpoint, params={"app_key": self.app_key} | params).json()

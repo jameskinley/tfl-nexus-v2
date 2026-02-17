@@ -58,15 +58,13 @@ class CrowdingPollingCommand:
         }
         
         try:
-            # Get all active lines
             lines = self.db.query(Line).all()
-            line_ids: list[str] = [str(line.id) for line in lines]  # type: ignore
+            line_ids: list[str] = [str(line.id) for line in lines]
             
             if not line_ids:
                 self.logger.warning("No lines found in database")
                 return stats
             
-            # Fetch crowding data from TfL API
             self.logger.info(f"Fetching crowding data for {len(line_ids)} lines")
             crowding_data = self.client.get_line_crowding(line_ids)
             

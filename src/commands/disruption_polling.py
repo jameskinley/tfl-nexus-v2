@@ -22,6 +22,10 @@ class DisruptionPollingCommand:
             self.logger.info("Polling TfL API for disruptions...")
             
             delay_models = self.tfl_client.get_all_disruptions()
+
+            line_ids = db_session.query(db_models.Line).all()
+            line_ids = [str(line.id) for line in line_ids] #this can be made more efficient at some point
+            self.tfl_client.get_all_line_statuses(line_ids)
             
             disruption_ids_seen = set()
             new_count = 0
