@@ -226,6 +226,8 @@ def get_summarizer(summarizer_type: str = "simple", **kwargs) -> ReportSummarize
         ValueError: If summarizer_type not recognized
     """
     summarizer_type = summarizer_type.lower()
+
+    logging.getLogger(__name__).info("Using summarizer of type: %s", summarizer_type)
     
     if summarizer_type == 'simple':
         return SimpleTemplateSummarizer()

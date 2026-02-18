@@ -1,208 +1,221 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 from data.database import get_db
-from commands.line_operations import LineOperationsCommand
+from data import db_models
+from data.api_models import (
+    ResourceResponse, CollectionResponse, LineData, 
+    StationData, DisruptionData, PaginationMeta
+)
+from data.hateoas import HateoasBuilder
+from typing import Optional
 import logging
+import math
 
 router = APIRouter(prefix="/lines", tags=["Lines"])
+logger = logging.getLogger(__name__)
 
 
 @router.get(
     "",
-    summary="Get All Lines",
-    status_code=200,
-    responses={
-        200: {
-            "description": "Successfully retrieved all lines",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "lines": [
-                            {
-                                "id": "central",
-                                "name": "Central",
-                                "mode": "tube",
-                                "created": "2026-02-16T10:30:00"
-                            },
-                            {
-                                "id": "northern",
-                                "name": "Northern",
-                                "mode": "tube",
-                                "created": "2026-02-16T10:30:00"
-                            }
-                        ],
-                        "count": 2
-                    }
-                }
-            }
-        },
-        500: {
-            "description": "Internal server error",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Database query failed"}
-                }
-            }
-        }
-    }
+    response_model=CollectionResponse[LineData],
+    summary="List All Lines",
+    status_code=200
 )
-async def get_all_lines(db: Session = Depends(get_db)):
-    """
-    Get all available transport lines from the database.
-    
-    Retrieves a list of all transport lines (tube, overground, DLR, etc.) currently
-    stored in the database. If no lines are found, indicates that data ingestion 
-    needs to be performed first.
-    
-    Args:
-        db: Database session dependency.
-    
-    Returns:
-        dict: List of lines with their details and total count.
-    """
+async def list_lines(
+    mode: Optional[str] = Query(None, description="Filter by transport mode"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db)
+) -> CollectionResponse[LineData]:
     try:
-        command = LineOperationsCommand(db)
-        return command.get_all_lines()
+        query_builder = db.query(db_models.Line)
+        
+        if mode:
+            query_builder = query_builder.filter(db_models.Line.mode_name == mode)
+        
+        total = query_builder.count()
+        total_pages = math.ceil(total / per_page) if total > 0 else 1
+        
+        offset = (page - 1) * per_page
+        db_lines = query_builder.offset(offset).limit(per_page).all()
+        
+        lines = [
+            LineData(
+                id=line.id,
+                name=line.name,
+                mode=line.mode.name
+            )
+            for line in db_lines
+        ]
+        
+        query_params = {}
+        if mode:
+            query_params['mode'] = mode
+        
+        meta = PaginationMeta(
+            total=total,
+            count=len(lines),
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages
+        )
+        
+        links = HateoasBuilder.build_pagination_links(
+            "/lines", page, per_page, total_pages, query_params
+        )
+        
+        return CollectionResponse(data=lines, meta=meta, links=links)
+    
     except Exception as e:
-        logging.error(f"Error fetching lines: {e}")
+        logger.error(f"Error listing lines: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
     "/{line_id}",
+    response_model=ResourceResponse[LineData],
     summary="Get Line Details",
-    status_code=200,
-    responses={
-        200: {
-            "description": "Successfully retrieved line details",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "line_id": "central",
-                        "name": "Central",
-                        "mode": "tube",
-                        "routes": [
-                            {
-                                "id": 1,
-                                "name": "Ealing Broadway - Epping",
-                                "direction": "outbound"
-                            }
-                        ],
-                        "stations_count": 49
-                    }
-                }
-            }
-        },
-        404: {
-            "description": "Line not found",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Line 'invalid' not found"}
-                }
-            }
-        },
-        500: {
-            "description": "Internal server error",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Database query failed"}
-                }
-            }
-        }
-    }
+    status_code=200
 )
-async def get_line_details(line_id: str, db: Session = Depends(get_db)):
-    """
-    Get detailed information for a specific transport line.
-    
-    Retrieves comprehensive details for a single line including its routes,
-    timetable information, and associated stations.
-    
-    Args:
-        line_id: The unique identifier for the line (e.g., 'central', 'northern').
-        db: Database session dependency.
-    
-    Returns:
-        dict: Detailed line information including routes and schedules.
-    
-    Raises:
-        HTTPException: 404 if line not found, 500 on server error.
-    """
+async def get_line(
+    line_id: str = Path(..., description="Line ID"),
+    db: Session = Depends(get_db)
+) -> ResourceResponse[LineData]:
     try:
-        command = LineOperationsCommand(db)
-        return command.get_line_details(line_id)
+        db_line = db.query(db_models.Line).filter(
+            db_models.Line.id == line_id
+        ).first()
+        
+        if not db_line:
+            raise HTTPException(status_code=404, detail=f"Line '{line_id}' not found")
+        
+        line_data = LineData(
+            id=db_line.id,
+            name=db_line.name,
+            mode=db_line.mode.name
+        )
+        
+        self_href = f"/lines/{line_id}"
+        additional_links = HateoasBuilder.line_links(line_id)
+        links = HateoasBuilder.build_links(self_href, additional_links)
+        
+        return ResourceResponse(data=line_data, links=links)
+    
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error fetching line details: {e}")
+        logger.error(f"Error fetching line: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/{line_id}/stations",
+    response_model=CollectionResponse[StationData],
+    summary="Get Stations on Line",
+    status_code=200
+)
+async def get_line_stations(
+    line_id: str = Path(..., description="Line ID"),
+    db: Session = Depends(get_db)
+) -> CollectionResponse[StationData]:
+    try:
+        db_line = db.query(db_models.Line).filter(
+            db_models.Line.id == line_id
+        ).first()
+        
+        if not db_line:
+            raise HTTPException(status_code=404, detail=f"Line '{line_id}' not found")
+        
+        stations = [
+            StationData(
+                id=station.id,
+                name=station.name,
+                lat=station.lat,
+                lon=station.lon,
+                modes=[mode.name for mode in station.modes]
+            )
+            for station in db_line.stations
+        ]
+        
+        meta = PaginationMeta(
+            total=len(stations),
+            count=len(stations),
+            page=1,
+            per_page=len(stations),
+            total_pages=1
+        )
+        
+        links = HateoasBuilder.build_links(f"/lines/{line_id}/stations")
+        
+        return CollectionResponse(data=stations, meta=meta, links=links)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching line stations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
     "/{line_id}/disruptions",
-    summary="Get Live Line Disruptions",
-    status_code=200,
-    responses={
-        200: {
-            "description": "Successfully retrieved live disruptions from TfL API",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "line_id": "central",
-                        "line_name": "Central",
-                        "disruptions": [
-                            {
-                                "category": "RealTime",
-                                "type": "lineInfo",
-                                "severity": "Minor Delays",
-                                "description": "Central Line: Minor delays due to a faulty train"
-                            }
-                        ],
-                        "count": 1
-                    }
-                }
-            }
-        },
-        404: {
-            "description": "Line not found",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Line 'invalid' not found"}
-                }
-            }
-        },
-        500: {
-            "description": "Internal server error",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "TfL API connection failed"}
-                }
-            }
-        }
-    }
+    response_model=CollectionResponse[DisruptionData],
+    summary="Get Disruptions for Line",
+    status_code=200
 )
-async def get_line_disruptions(line_id: str, db: Session = Depends(get_db)):
-    """
-    Get live disruption information for a specific line from TfL API.
-    
-    Fetches real-time disruption data directly from the Transport for London API,
-    including service closures, delays, and planned engineering works.
-    
-    Args:
-        line_id: The unique identifier for the line (e.g., 'central', 'northern').
-        db: Database session dependency.
-    
-    Returns:
-        dict: Current disruptions affecting the specified line.
-    
-    Raises:
-        HTTPException: 404 if line not found, 500 on server error.
-    """
+async def get_line_disruptions(
+    line_id: str = Path(..., description="Line ID"),
+    active: bool = Query(True, description="Filter active disruptions only"),
+    db: Session = Depends(get_db)
+) -> CollectionResponse[DisruptionData]:
     try:
-        command = LineOperationsCommand(db)
-        return command.get_line_disruptions(line_id)
+        db_line = db.query(db_models.Line).filter(
+            db_models.Line.id == line_id
+        ).first()
+        
+        if not db_line:
+            raise HTTPException(status_code=404, detail=f"Line '{line_id}' not found")
+        
+        query_builder = db.query(db_models.Disruption).filter(
+            db_models.Disruption.line_id == line_id
+        )
+        
+        if active:
+            query_builder = query_builder.filter(db_models.Disruption.is_active == True)
+        
+        disruptions_db = query_builder.all()
+        
+        disruptions = [
+            DisruptionData(
+                id=d.id,
+                line_id=d.line_id,
+                type=d.type,
+                category=d.category,
+                category_description=d.category_description,
+                summary=d.summary,
+                description=d.description,
+                additional_info=d.additional_info,
+                created=d.created,
+                last_update=d.last_update,
+                is_active=d.is_active,
+                affected_stops_count=len(d.affected_stops)
+            )
+            for d in disruptions_db
+        ]
+        
+        meta = PaginationMeta(
+            total=len(disruptions),
+            count=len(disruptions),
+            page=1,
+            per_page=len(disruptions),
+            total_pages=1
+        )
+        
+        links = HateoasBuilder.build_links(f"/lines/{line_id}/disruptions")
+        
+        return CollectionResponse(data=disruptions, meta=meta, links=links)
+    
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error fetching disruptions: {e}")
+        logger.error(f"Error fetching line disruptions: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

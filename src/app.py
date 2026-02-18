@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from data.models import Response
 from data import db_models
 from data.database import init_db, SessionLocal
-from routers import ingestion, routes, lines, stations, graph, stats, meta, disruptions, reports
+from routers import data_imports, journeys, lines, stations, network, system, modes, disruptions, reports
 from commands.disruption_polling import DisruptionPollingCommand
 from commands.crowding_polling import CrowdingPollingCommand
 from commands.network_reporting import NetworkReportingCommand
@@ -14,14 +14,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 tags_metadata = [
     {
-        "name": "Data Ingestion",
-        "description": "Data ingestion operations for loading TfL network data into the database. "
-                       "Initialize and populate the system with transport network information."
-    },
-    {
-        "name": "Routing",
-        "description": "Journey planning and route calculation with multiple optimization strategies. "
-                       "Supports fastest path, robust routing, low-crowding, and ML-powered hybrid modes."
+        "name": "Journeys",
+        "description": "Journey planning between stations with multiple optimization strategies. "
+                       "Request journey plans as resources using natural semantics."
     },
     {
         "name": "Lines",
@@ -30,33 +25,38 @@ tags_metadata = [
     },
     {
         "name": "Stations",
-        "description": "Station search and information including connectivity and graph status. "
-                       "Query station details and check routing graph inclusion."
-    },
-    {
-        "name": "Graph",
-        "description": "Transport network graph operations including statistics and visualization. "
-                       "Analyze network topology and generate visual representations."
-    },
-    {
-        "name": "Stats",
-        "description": "Database statistics and system metrics. "
-                       "Monitor data completeness and system health."
-    },
-    {
-        "name": "Meta",
-        "description": "TfL API metadata including modes, disruption categories, and stop points. "
-                       "Access reference data and system configuration information."
+        "description": "Station search and information including connectivity, crowding, and graph status. "
+                       "Query station details and relationships."
     },
     {
         "name": "Disruptions",
-        "description": "Service disruption tracking and analysis. "
-                       "Query active disruptions affecting transport lines and stations."
+        "description": "Service disruption tracking and analysis with historical data. "
+                       "Query disruptions across the network with flexible filtering."
     },
     {
         "name": "Reports",
-        "description": "Network status reports with AI-powered summaries. "
-                       "Generate, retrieve, and manage network health reports with optional LLM summaries."
+        "description": "Network status reports with AI-powered summaries and historical tracking. "
+                       "Generate, retrieve, and manage network health reports."
+    },
+    {
+        "name": "Network",
+        "description": "Transport network topology and analysis including graph metrics and visualization. "
+                       "Access network-wide crowding information."
+    },
+    {
+        "name": "Data Imports",
+        "description": "Data import job management for loading TfL network data. "
+                       "Monitor import progress and status."
+    },
+    {
+        "name": "System",
+        "description": "System health, statistics, and operational metrics. "
+                       "Monitor database state and service availability."
+    },
+    {
+        "name": "Reference Data",
+        "description": "Reference data including transport modes and disruption categories. "
+                       "Access metadata from TfL API."
     }
 ]
 
@@ -65,42 +65,44 @@ app = FastAPI(
     description="""
 # Transport for London Network Intelligence API
 
-A comprehensive API for analyzing, routing, and monitoring the Transport for London network 
+A comprehensive RESTful API for analyzing, routing, and monitoring the Transport for London network 
 with real-time disruption tracking, intelligent journey planning, and network health reporting.
 
 ## Key Features
 
-* **Intelligent Route Planning**: Multiple optimization strategies (fastest, robust, low-crowding, ML-hybrid)
+* **Intelligent Journey Planning**: True REST resource-based journey queries
 * **Real-time Disruptions**: Automatic polling and storage of service disruptions
 * **Network Analysis**: Graph-based network analysis and visualization
 * **Crowding Information**: Real-time crowding data for stations and lines
 * **AI-Powered Reports**: Optional LLM-generated network status summaries
-* **Comprehensive Data**: Lines, stations, routes, schedules, and stop points
+* **HATEOAS Support**: Hypermedia links for API discoverability
+
+## RESTful Design
+
+This API follows REST principles with:
+- Resources identified by URLs
+- Standard HTTP methods (GET, POST, PUT, DELETE)
+- Hypermedia links (HATEOAS) for navigation
+- Consistent response formats with metadata
+- Proper status codes
 
 ## Data Sources
 
 All data is sourced from the official Transport for London (TfL) Unified API.
-
-## Getting Started
-
-1. Initialize the database with `/ingestion/start`
-2. Check ingestion status with `/ingestion/status`
-3. Explore lines, stations, and routes using the respective endpoints
-4. Calculate optimal routes with `/routes/{from}/{to}`
     """,
-    version="2.0.0",
+    version="3.0.0",
     openapi_tags=tags_metadata
 )
 
-app.include_router(ingestion.router)
-app.include_router(routes.router)
+app.include_router(journeys.router)
 app.include_router(lines.router)
 app.include_router(stations.router)
-app.include_router(graph.router)
-app.include_router(stats.router)
-app.include_router(meta.router)
 app.include_router(disruptions.router)
 app.include_router(reports.router)
+app.include_router(network.router)
+app.include_router(data_imports.router)
+app.include_router(system.router)
+app.include_router(modes.router)
 
 disruption_command = DisruptionPollingCommand()
 polling_task = None
@@ -200,32 +202,41 @@ async def shutdown_event():
 
 @app.get(
     "/",
-    response_model=Response,
-    status_code=200,
-    summary="Health Check",
-    tags=["Health"],
-    responses={
-        200: {
-            "description": "API is healthy and operational",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "status": "success",
-                        "message": "health is wealth"
-                    }
-                }
-            }
-        }
-    }
+    summary="API Root",
+    tags=["System"],
+    status_code=200
 )
-async def root() -> Response:
-    """
-    Health check endpoint to verify API availability.
+async def root():
+    from data.api_models import ResourceResponse
+    from data.hateoas import HateoasBuilder
+    from pydantic import BaseModel
     
-    Returns a simple status response indicating the service is running and healthy.
-    Use this endpoint to monitor API availability and service health.
+    class ApiRoot(BaseModel):
+        title: str
+        version: str
+        description: str
     
-    Returns:
-        Response: Status message confirming API health.
-    """
-    return Response(status="success", message="health is wealth")
+    root_data = ApiRoot(
+        title="TfL Nexus API",
+        version="3.0.0",
+        description="RESTful Transport for London Network Intelligence API"
+    )
+    
+    additional_links = {
+        "journeys": "/journeys",
+        "lines": "/lines",
+        "stations": "/stations",
+        "disruptions": "/disruptions",
+        "reports": "/reports",
+        "network": "/network/topology",
+        "data_imports": "/data-imports",
+        "system_health": "/system/health",
+        "system_statistics": "/system/statistics",
+        "modes": "/modes",
+        "disruption_categories": "/disruption-categories",
+        "docs": "/docs"
+    }
+    
+    links = HateoasBuilder.build_links("/", additional_links)
+    
+    return ResourceResponse(data=root_data, links=links)

@@ -2,6 +2,7 @@ import requests
 import json
 from dotenv import load_dotenv
 import os
+from logging import getLogger
 
 load_dotenv()
 
@@ -11,6 +12,9 @@ class OpenRouterClient:
         self.api_key = os.getenv("LLM_API_KEY")
         self.model = os.getenv("LLM_MODEL", "openai/gpt-oss-20b:free")
         self.reasoning_enabled = os.getenv("LLM_REASONING_ENABLED", "false").lower() == "true" 
+
+        self.logger = getLogger(__name__)
+        self.logger.info("OpenRouterClient initialized with model: %s", self.model)
 
     def chat(self, prompt: str) -> str:
         if not self.api_endpoint or not self.api_key:
