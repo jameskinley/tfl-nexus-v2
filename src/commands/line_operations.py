@@ -35,10 +35,27 @@ class LineOperationsCommand:
         return api_line
 
     def get_line_disruptions(self, line_id: str) -> dict:
-        lines = self.tfl_client.get_lines_with_disruptions()
+        db_line = self.db_session.query(db_models.Line).filter(db_models.Line.id == line_id).first()
         
-        for line in lines:
-            if line.id == line_id:
-                return {"line_id": line_id, "disruptions": line.disruptions}
+        if not db_line:
+            raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
         
-        raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
+        disruptions = self.db_session.query(db_models.Disruption).filter(
+            db_models.Disruption.line_id == line_id,
+            db_models.Disruption.is_active == True
+        ).all()
+        
+        return {
+            "line_id": line_id,
+            "disruptions": [{
+                "id": d.id,
+                "type": d.type,
+                "category": d.category,
+                "category_description": d.category_description,
+                "summary": d.summary,
+                "description": d.description,
+                "additional_info": d.additional_info,
+                "created": d.created,
+                "last_update": d.last_update
+            } for d in disruptions]
+        }

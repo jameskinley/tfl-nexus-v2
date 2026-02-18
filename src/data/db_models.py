@@ -247,3 +247,13 @@ class NetworkReport(Base):
     affected_lines_count = Column(Integer, default=0)
     graph_connectivity_score = Column(Float, nullable=True)
     average_reliability_score = Column(Float, nullable=True)
+
+
+class PollingMeta(Base):
+    """Tracks polling metadata to prevent excessive API calls"""
+    __tablename__ = 'polling_meta'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    poll_type = Column(String, unique=True, nullable=False, index=True)
+    last_poll_timestamp = Column(String, nullable=False)
+    poll_interval_seconds = Column(Integer, nullable=False)

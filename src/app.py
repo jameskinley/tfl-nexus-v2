@@ -125,7 +125,7 @@ async def poll_disruptions_background():
 
 
 async def poll_crowding_background():
-    """Background task that polls for crowding data every 300 seconds (5 minutes)"""
+    """Background task that polls for crowding data every 900 seconds (15 minutes)"""
     while True:
         try:
             db_session = SessionLocal()
@@ -138,7 +138,7 @@ async def poll_crowding_background():
         except Exception as e:
             logging.error(f"Error in crowding polling task: {e}", exc_info=True)
         
-        await asyncio.sleep(300)
+        await asyncio.sleep(900)
 
 
 async def generate_daily_reports_background():
@@ -176,7 +176,7 @@ async def startup_event():
     
     # Start crowding polling task
     crowding_polling_task = asyncio.create_task(poll_crowding_background())
-    logging.info("Crowding polling task started (300s interval)")
+    logging.info("Crowding polling task started (900s interval)")
     
     # Start daily report generation task
     report_generation_task = asyncio.create_task(generate_daily_reports_background())

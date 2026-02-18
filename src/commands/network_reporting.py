@@ -7,10 +7,11 @@ Stores reports in database for historical analysis.
 
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
-from data.db_models import NetworkReport, Disruption, Line, StationCrowding
+from data.db_models import NetworkReport, Disruption, Line, StationCrowding, Station
 from data.report_summarizer import ReportSummarizer, SimpleTemplateSummarizer
 from data.disruption_analyzer import DisruptionPredictor
 from graph.graph_manager import GraphManager
+from commands.crowding_operations import CrowdingOperations
 from datetime import datetime, timedelta
 import json
 import logging
@@ -182,6 +183,22 @@ class NetworkReportingCommand:
                         'high_crowding_count': high_crowding,
                         'data_age_minutes': 30
                     }
+                    
+                    # Get top N most crowded stations with details
+                    crowding_ops = CrowdingOperations(self.db)
+                    top_crowded = crowding_ops.get_n_most_crowded(10)
+                    
+                    report_data['top_crowded_stations'] = [
+                        {
+                            'station_id': c.station_id,
+                            'station_name': c.station.name if c.station else 'Unknown',
+                            'crowding_level': c.crowding_level,
+                            'capacity_percentage': c.capacity_percentage,
+                            'timestamp': c.timestamp,
+                            'time_slice': c.time_slice
+                        }
+                        for c in top_crowded
+                    ]
             except Exception as e:
                 self.logger.warning(f"Failed to get crowding summary: {e}")
             

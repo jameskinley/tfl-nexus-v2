@@ -6,8 +6,9 @@ Similar to disruption polling, maintains historical crowding patterns.
 """
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from data.tfl_client import TflClient
-from data.db_models import StationCrowding, Station, Line, StationNaptan
+from data.db_models import StationCrowding, Station, Line, StationNaptan, PollingMeta
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
@@ -41,68 +42,113 @@ class CrowdingPollingCommand:
             {
                 'timestamp': str,
                 'records_created': int,
-                'lines_checked': int,
+                'stations_checked': int,
                 'stations_updated': int,
                 'errors': list
             }
         """
-        timestamp = datetime.now().isoformat()
-        self.logger.info(f"Starting crowding data poll at {timestamp}")
+        timestamp = datetime.now()
+        poll_interval = 900
+        
+        poll_meta = self.db.query(PollingMeta).filter(
+            PollingMeta.poll_type == 'crowding'
+        ).first()
+        
+        if poll_meta:
+            last_poll = datetime.fromisoformat(poll_meta.last_poll_timestamp) #type: ignore
+            time_since_poll = (timestamp - last_poll).total_seconds()
+            
+            if time_since_poll < poll_interval:
+                self.logger.info(f"Skipping crowding poll - last poll was {int(time_since_poll)}s ago")
+                return {
+                    'timestamp': timestamp.isoformat(),
+                    'records_created': 0,
+                    'stations_checked': 0,
+                    'stations_updated': 0,
+                    'errors': [],
+                    'skipped': True
+                }
+        
+        self.logger.info(f"Starting crowding data poll at {timestamp.isoformat()}")
         
         stats = {
-            'timestamp': timestamp,
+            'timestamp': timestamp.isoformat(),
             'records_created': 0,
-            'lines_checked': 0,
+            'stations_checked': 0,
             'stations_updated': set(),
             'errors': []
         }
         
         try:
-            lines = self.db.query(Line).all()
-            line_ids: list[str] = [str(line.id) for line in lines]
+            naptan_station_map = {}
             
-            if not line_ids:
-                self.logger.warning("No lines found in database")
+            station_naptans = self.db.query(
+                StationNaptan.station_id,
+                StationNaptan.naptan_code
+            ).filter(
+                StationNaptan.naptan_code.like('940GZZLU%')
+            ).all()
+            
+            naptans = []
+            for station_id, naptan_code in station_naptans:
+                naptan_station_map[naptan_code] = station_id
+                naptans.append(naptan_code)
+            
+            if not naptans:
+                self.logger.warning("No stations found in database")
                 return stats
             
-            self.logger.info(f"Fetching crowding data for {len(line_ids)} lines")
-            crowding_data = self.client.get_line_crowding(line_ids)
+            self.logger.info(f"Fetching crowding data for {len(naptans)} stations")
+            crowding_data = self.client.get_stations_crowding(naptans)
             
-            stats['lines_checked'] = len(line_ids)
+            stats['stations_checked'] = len(naptans)
             
-            # Process crowding data
-            # crowding_data format: {naptan_id: {line_id: [crowding_metrics]}}
-            for naptan_id, line_data in crowding_data.items():
-                # Find station by NaPTAN code
-                station_naptan = self.db.query(StationNaptan).filter(
-                    StationNaptan.naptan_code == naptan_id
-                ).first()
+            for naptan_id, crowding_info in crowding_data.items():
+                station_id = naptan_station_map.get(naptan_id)
                 
-                if not station_naptan:
+                if not station_id:
                     self.logger.debug(f"Station not found for NaPTAN: {naptan_id}")
                     continue
                 
-                station_id = station_naptan.station_id
+                if not crowding_info:
+                    continue
+                
                 stats['stations_updated'].add(station_id)
                 
-                # Process each line's crowding data at this station
-                for line_id, crowding_metrics in line_data.items():
-                    for metric in crowding_metrics:
-                        # Create crowding record
-                        crowding_record = StationCrowding(
-                            station_id=station_id,
-                            line_id=line_id,
-                            timestamp=timestamp,
-                            crowding_level=metric.get('crowding_level'),
-                            capacity_percentage=metric.get('capacity_percentage'),
-                            time_slice=metric.get('time_slice', 'unknown'),
-                            data_source='tfl_api'
-                        )
-                        
-                        self.db.add(crowding_record)
-                        stats['records_created'] += 1
+                crowding_percentage = float(crowding_info.get('crowding', 0.0))
+                
+                if crowding_percentage <= 0.25:
+                    level = 'low'
+                elif crowding_percentage <= 0.50:
+                    level = 'moderate'
+                elif crowding_percentage <= 0.75:
+                    level = 'high'
+                else:
+                    level = 'very_high'
+                
+                crowding_record = StationCrowding(
+                    station_id=station_id,
+                    line_id=None,
+                    timestamp=crowding_info.get('timestamp') or stats['timestamp'],
+                    crowding_level=level,
+                    capacity_percentage=crowding_percentage,
+                    time_slice='live',
+                    data_source='tfl_api'
+                )
+                
+                self.db.add(crowding_record)
+                stats['records_created'] += 1
             
-            # Commit all records
+            if poll_meta:
+                poll_meta.last_poll_timestamp = timestamp.isoformat() #type: ignore
+            else:
+                poll_meta = PollingMeta(
+                    poll_type='crowding',
+                    last_poll_timestamp=timestamp.isoformat(),
+                    poll_interval_seconds=poll_interval
+                )
+                self.db.add(poll_meta)
+            
             self.db.commit()
             
             # Clean up old records (keep last 7 days)

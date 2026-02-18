@@ -35,7 +35,7 @@ class OpenRouterClient:
                 },
                 {
                     "role": "user",
-                    "content": f"Generate a transit network status report summary from this data:\n\n{prompt}"
+                    "content": f"Generate a plaintext (no markdown), conversational but precise transit network status report summary from this data:\n\n{prompt}"
                 }
             ]
         })
