@@ -50,7 +50,7 @@ class LineData(BaseModel):
 
 class RouteSegment(BaseModel):
     station: StationData
-    line: str
+    line: Optional[str] = None
     arrival_time: Optional[str] = None
     departure_time: Optional[str] = None
     wait_time_minutes: float = 0.0

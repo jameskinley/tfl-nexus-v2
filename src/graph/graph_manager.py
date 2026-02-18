@@ -8,6 +8,11 @@ from .routing_strategies import RoutingStrategy
 
 logger = getLogger(__name__)
 
+# Constants for change penalties
+TRANSFER_TIME_MINUTES = 3.0  # Average time to change lines
+CHANGE_PENALTY_BASE = 5.0  # Base penalty for any line change (in time units)
+CHANGE_PENALTY_ML_MULTIPLIER = 1.5  # Extra penalty for Metropolitan Line changes
+
 class GraphManager:
     """
     Graph manager for building network graphs from station data.
@@ -212,9 +217,9 @@ class GraphManager:
             mode=mode
         )
 
-    def route_time_only(self, start_stop, end_stop, current_time=None):
+    def route_time_only(self, start_stop, end_stop, current_time=None, max_changes=None):
         """
-        Find shortest path by time.
+        Find shortest path by time with natural change minimization.
         
         Args:
             start_stop: Source station ID
@@ -224,17 +229,19 @@ class GraphManager:
                          - datetime.time or datetime.datetime object
                          - String in "HH:MM" format
                          If provided, uses dynamic weights based on schedules.
+            max_changes: Optional maximum number of line changes
         
         Returns:
             List of station IDs representing the path
         """
-        if current_time is not None:
-            time_minutes = self.time_to_minutes(current_time)
-            weight_func = lambda u, v, d: self.get_dynamic_weight(u, v, time_minutes)
-            return nx.shortest_path(self.graph, source=start_stop, target=end_stop, weight=weight_func)
-        else:
-            # Use static base time weights
-            return nx.shortest_path(self.graph, source=start_stop, target=end_stop, weight='time_distance')
+        # Use state-space graph approach for natural change penalization
+        return self.find_path_with_change_penalty(
+            start_stop,
+            end_stop,
+            strategy=None,
+            context={'current_time': current_time} if current_time else None,
+            max_changes=max_changes
+        )
     
     def route_fragility_only(self, start_stop, end_stop):
         """
@@ -463,6 +470,256 @@ class GraphManager:
         
         return penalty
 
+    def count_changes_in_path(self, path: list[str]) -> int:
+        """
+        Count the number of line changes in a station path.
+        Utility method for reporting purposes.
+        
+        Args:
+            path: List of station IDs
+            
+        Returns:
+            Number of line changes
+        """
+        if len(path) < 2:
+            return 0
+        
+        changes = 0
+        current_line = None
+        
+        for i in range(len(path) - 1):
+            if not self.graph.has_edge(path[i], path[i + 1]):
+                continue
+            edge_data = self.graph[path[i]][path[i + 1]]
+            line = edge_data.get('line')
+            
+            if line and current_line and line != current_line:
+                changes += 1
+            
+            if line:
+                current_line = line
+        
+        return changes
+
+    def build_state_space_graph(
+        self,
+        strategy: Optional[RoutingStrategy] = None,
+        context: Optional[Dict[str, Any]] = None,
+        use_time_weight: bool = True,
+        avoid_lines: Optional[list[str]] = None
+    ) -> nx.DiGraph:
+        """
+        Build a state-space graph where nodes are (station_id, line_id) pairs.
+        This naturally penalizes line changes during pathfinding.
+        
+        Args:
+            strategy: Optional routing strategy for edge weights
+            context: Optional context for strategy
+            use_time_weight: Whether to use time-based weights (vs strategy weights)
+            avoid_lines: Optional list of line IDs to exclude from routing
+            
+        Returns:
+            Directed graph with (station, line) nodes
+        """
+        state_graph = nx.DiGraph()
+        avoid_lines_set = set(avoid_lines or [])
+        
+        # Create nodes for each (station, line) combination
+        # Map each edge to its line, creating state nodes
+        station_lines = {}  # station_id -> set of line_ids
+        
+        for u, v, data in self.graph.edges(data=True):
+            line = data.get('line')
+            if not line:
+                continue
+            
+            # Skip lines that should be avoided
+            if line in avoid_lines_set:
+                continue
+                
+            # Track which lines serve each station
+            if u not in station_lines:
+                station_lines[u] = set()
+            if v not in station_lines:
+                station_lines[v] = set()
+            station_lines[u].add(line)
+            station_lines[v].add(line)
+        
+        # Add nodes for each (station, line) pair
+        for station_id, lines in station_lines.items():
+            for line_id in lines:
+                state_node = (station_id, line_id)
+                state_graph.add_node(
+                    state_node,
+                    station_id=station_id,
+                    line_id=line_id,
+                    **self.graph.nodes[station_id]
+                )
+        
+        # Add movement edges (along the same line)
+        for u, v, data in self.graph.edges(data=True):
+            line = data.get('line')
+            if not line:
+                continue
+            
+            # Skip lines that should be avoided
+            if line in avoid_lines_set:
+                continue
+            
+            # Calculate edge weight
+            if strategy and context and not use_time_weight:
+                weight = strategy.calculate_edge_weight(data, context)
+            else:
+                weight = data.get('time_distance', data.get('base_time', 5.0))
+            
+            # Add bidirectional edges for movement along the same line
+            state_u = (u, line)
+            state_v = (v, line)
+            
+            state_graph.add_edge(state_u, state_v, weight=weight, **data)
+            state_graph.add_edge(state_v, state_u, weight=weight, **data)
+        
+        # Add transfer edges (line changes at same station)
+        for station_id, lines in station_lines.items():
+            lines_list = list(lines)
+            for i, line1 in enumerate(lines_list):
+                for line2 in lines_list[i+1:]:
+                    # Calculate transfer penalty
+                    transfer_weight = TRANSFER_TIME_MINUTES + CHANGE_PENALTY_BASE
+                    
+                    # Extra penalty if Metropolitan Line is involved
+                    if 'metropolitan' in line1.lower() or 'metropolitan' in line2.lower():
+                        transfer_weight *= CHANGE_PENALTY_ML_MULTIPLIER
+                    
+                    # Add bidirectional transfer edges
+                    state_graph.add_edge(
+                        (station_id, line1),
+                        (station_id, line2),
+                        weight=transfer_weight,
+                        is_transfer=True,
+                        station_id=station_id
+                    )
+                    state_graph.add_edge(
+                        (station_id, line2),
+                        (station_id, line1),
+                        weight=transfer_weight,
+                        is_transfer=True,
+                        station_id=station_id
+                    )
+        
+        avoided_msg = f" (avoiding {len(avoid_lines_set)} lines: {', '.join(avoid_lines_set)})" if avoid_lines_set else ""
+        logger.info(
+            f"Built state-space graph: {state_graph.number_of_nodes()} nodes "
+            f"({self.graph.number_of_nodes()} stations), "
+            f"{state_graph.number_of_edges()} edges{avoided_msg}"
+        )
+        
+        return state_graph
+    
+    def find_path_with_change_penalty(
+        self,
+        start_station: str,
+        end_station: str,
+        strategy: Optional[RoutingStrategy] = None,
+        context: Optional[Dict[str, Any]] = None,
+        max_changes: Optional[int] = None
+    ) -> list:
+        """
+        Find optimal path using state-space graph that naturally minimizes changes.
+        
+        Args:
+            start_station: Origin station ID
+            end_station: Destination station ID
+            strategy: Optional routing strategy
+            context: Optional context for strategy
+            max_changes: Optional hard limit on changes
+            
+        Returns:
+            List of station IDs (not state nodes)
+        """
+        # Extract avoid_lines from context
+        avoid_lines = None
+        if context:
+            avoid_lines = context.get('user_preferences', {}).get('avoid_lines', [])
+        
+        # Build state-space graph
+        use_time = strategy is None
+        state_graph = self.build_state_space_graph(
+            strategy, context, use_time, avoid_lines=avoid_lines
+        )
+        
+        # Find all possible start and end state nodes
+        start_states = [n for n in state_graph.nodes() if n[0] == start_station]
+        end_states = [n for n in state_graph.nodes() if n[0] == end_station]
+        
+        if not start_states or not end_states:
+            raise nx.NodeNotFound(f"Station not found in state graph")
+        
+        # Find shortest path considering all start/end combinations
+        best_path = None
+        best_weight = float('inf')
+        
+        for start_state in start_states:
+            for end_state in end_states:
+                try:
+                    path = nx.shortest_path(
+                        state_graph,
+                        start_state,
+                        end_state,
+                        weight='weight'
+                    )
+                    
+                    # Calculate total weight
+                    path_weight = sum(
+                        state_graph[path[i]][path[i+1]]['weight']
+                        for i in range(len(path) - 1)
+                    )
+                    
+                    # Check max_changes constraint if specified
+                    if max_changes is not None:
+                        num_changes = sum(
+                            1 for i in range(len(path) - 1)
+                            if state_graph[path[i]][path[i+1]].get('is_transfer', False)
+                        )
+                        if num_changes > max_changes:
+                            continue
+                    
+                    if path_weight < best_weight:
+                        best_weight = path_weight
+                        best_path = path
+                        
+                except nx.NetworkXNoPath:
+                    continue
+        
+        if not best_path:
+            error_msg = f"No path found between {start_station} and {end_station}"
+            if avoid_lines:
+                error_msg += f" (avoiding lines: {', '.join(avoid_lines)})"
+            if max_changes is not None:
+                error_msg += f" (max changes: {max_changes})"
+            raise nx.NetworkXNoPath(error_msg)
+        
+        # Convert state path to station path
+        station_path = [state[0] for state in best_path]
+        
+        # Remove consecutive duplicates (from transfers)
+        result_path = [station_path[0]]
+        for station in station_path[1:]:
+            if station != result_path[-1]:
+                result_path.append(station)
+        
+        # Count and log changes
+        changes = sum(
+            1 for i in range(len(best_path) - 1)
+            if best_path[i][1] != best_path[i+1][1] and best_path[i][0] == best_path[i+1][0]
+        )
+        logger.info(
+            f"Found path with {len(result_path)} stations, {changes} changes, "
+            f"total weight: {best_weight:.2f}"
+        )
+        
+        return result_path
+
     def route_with_strategy(
         self,
         start_stop: str,
@@ -471,7 +728,7 @@ class GraphManager:
         context: Dict[str, Any]
     ) -> list:
         """
-        Find route using a pluggable routing strategy.
+        Find route using a pluggable routing strategy with natural change minimization.
         
         Args:
             start_stop: Source station ID
@@ -480,33 +737,28 @@ class GraphManager:
             context: Context dictionary with:
                 - 'current_time': datetime object
                 - 'crowding_data': Station crowding metrics
-                - 'user_preferences': User weightings
+                - 'user_preferences': User weightings (including max_changes)
                 - 'predictor': DisruptionPredictor instance
                 
         Returns:
             List of station IDs representing the path
         """
-        # Apply strategy weights to all edges
-        for u, v, data in self.graph.edges(data=True):
-            weight = strategy.calculate_edge_weight(data, context)
-            data['strategy_weight'] = weight
+        # Extract max_changes from user preferences
+        max_changes = context.get('user_preferences', {}).get('max_changes')
         
-        # Find shortest path using strategy weights
-        try:
-            path = nx.shortest_path(
-                self.graph,
-                source=start_stop,
-                target=end_stop,
-                weight='strategy_weight'
-            )
-            logger.info(f"Route found using {strategy.name} strategy: {len(path)} stops")
-            return path
-        except nx.NetworkXNoPath:
-            logger.error(f"No path found between {start_stop} and {end_stop}")
-            raise
-        except nx.NodeNotFound as e:
-            logger.error(f"Station not found in graph: {e}")
-            raise
+        # Use state-space graph approach for natural change penalization
+        path = self.find_path_with_change_penalty(
+            start_stop,
+            end_stop,
+            strategy=strategy,
+            context=context,
+            max_changes=max_changes
+        )
+        
+        logger.info(
+            f"Route found using {strategy.name} strategy: {len(path)} stops"
+        )
+        return path
 
     def build_graph_from_db_with_disruptions(self, session: Session):
         """

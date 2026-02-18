@@ -46,7 +46,16 @@ class RouteCalculationCommand:
         
         return None
 
-    def calculate_route(self, from_location: str, to_location: str, time: str, alternatives: bool = False) -> dict:
+    def calculate_route(
+        self, 
+        from_location: str, 
+        to_location: str, 
+        time: str, 
+        alternatives: bool = False,
+        max_changes: Optional[int] = None,
+        accessible: bool = False,
+        avoid_lines: Optional[list[str]] = None
+    ) -> dict:
         graph_manager = GraphManager()
         graph_manager.build_graph_from_db_with_disruptions(self.db_session)
         
@@ -86,7 +95,11 @@ class RouteCalculationCommand:
         context = {
             'current_time': datetime.strptime(time, "%H:%M") if time else datetime.now(),
             'crowding_data': {},
-            'user_preferences': {},
+            'user_preferences': {
+                'max_changes': max_changes,
+                'accessible': accessible,
+                'avoid_lines': avoid_lines or []
+            },
             'predictor': None
         }
         
@@ -122,12 +135,17 @@ class RouteCalculationCommand:
         try:
             if self.routing_mode == 'fastest':
                 # Use existing time-only routing for fastest mode
-                path = graph_manager.route_time_only(from_station.id, to_station.id, time)
+                path = graph_manager.route_time_only(
+                    str(from_station.id), 
+                    str(to_station.id), 
+                    time,
+                    max_changes=max_changes
+                )
             else:
                 # Use strategy-based routing
                 path = graph_manager.route_with_strategy(
-                    from_station.id,
-                    to_station.id,
+                    str(from_station.id),
+                    str(to_station.id),
                     strategy,
                     context
                 )

@@ -38,7 +38,13 @@ async def get_journey(
     
     try:
         command = RouteCalculationCommand(db, routing_mode=strategy)
-        result = command.calculate_route(origin, destination, time, alternatives=alternatives)
+        result = command.calculate_route(
+            origin, destination, time, 
+            alternatives=alternatives,
+            max_changes=max_changes,
+            accessible=accessible,
+            avoid_lines=[line.strip() for line in avoid_lines.split(',')] if avoid_lines else None
+        )
         
         origin_station = StationData(
             id=result['from']['station_id'],
@@ -62,7 +68,7 @@ async def get_journey(
                     lon=station_data.get('lon'),
                     modes=[]
                 ),
-                line=station_data.get('line', ''),
+                line=station_data.get('line'),
                 arrival_time=None,
                 departure_time=None,
                 wait_time_minutes=station_data.get('time_to_next', 0.0)

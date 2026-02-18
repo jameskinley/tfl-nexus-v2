@@ -32,14 +32,14 @@ class OpenRouterClient:
                     "role": "system",
                     "content": "You are a helpful assistant that generates concise summaries of transit network reports. "
                                "Focus on key insights and actionable information. "
-                               "Output should be clear and easy to understand, in plaintext format, and no more than 150 words. "
+                               "Output should be clear and easy to understand, in plaintext format."
                                "It should follow a report-style format, with a brief headline followed by bullet points of key details. "
                                "Pay special attention to the 'disruption_details' field which contains specific information about each disruption, "
                                "including summaries, descriptions, and affected lines."
                 },
                 {
                     "role": "user",
-                    "content": f"Generate a plaintext (no markdown), conversational but precise transit network status report summary from this data:\n\n{prompt}"
+                    "content": f"Generate a plaintext (no markdow!n), conversational but precise transit network status report summary from this data:\n\n{prompt}"
                 }
             ]
         })
