@@ -1,0 +1,10 @@
+services:
+  tfl-nexus-api:
+    build: .
+    image: tfl-nexus-v2
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./src/tfl_nexus.db:/app/tfl_nexus.db:rw
+    env_file:
+      - src/.env
