@@ -71,7 +71,7 @@ async def list_data_imports() -> CollectionResponse[DataImportJobData]:
         
         job_data = DataImportJobData(
             id="current",
-            status="running" if status['is_running'] else "completed",
+            status="running" if status.get('running') else "completed",
             started_at=status.get('started_at'),
             completed_at=status.get('completed_at'),
             error=status.get('error'),
@@ -109,7 +109,7 @@ async def get_data_import_status(job_id: str) -> ResourceResponse[DataImportJobD
         
         job_data = DataImportJobData(
             id=job_id,
-            status="running" if status['is_running'] else "completed",
+            status="running" if status.get('running') else "completed",
             started_at=status.get('started_at'),
             completed_at=status.get('completed_at'),
             error=status.get('error'),
