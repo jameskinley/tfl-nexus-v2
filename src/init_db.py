@@ -3,8 +3,8 @@
 Database initialization script for TfL Nexus
 
 Usage:
-    python src/init_db.py              # Drop all tables and recreate (default)
-    python src/init_db.py --no-drop    # Keep existing data, only create missing tables
+    python src/init_db.py              # Create missing tables only (safe)
+    python src/init_db.py --drop       # Drop all tables and recreate (destructive)
 """
 import sys
 import argparse
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 def main():
     parser = argparse.ArgumentParser(description='Initialize TfL Nexus database')
     parser.add_argument(
-        '--no-drop',
+        '--drop',
         action='store_true',
-        help='Do NOT drop existing tables (keep existing data)'
+        help='Drop existing tables before creating new ones (destructive)'
     )
     parser.add_argument(
         '--show-tables',
@@ -40,12 +40,12 @@ def main():
             logger.info(f"  - {table}")
         return
     
-    if not args.no_drop:
-        logger.info("Dropping all existing tables...")
+    if args.drop:
+        logger.info("Dropping all existing tables (requested)...")
         drop_all_tables()
         logger.info("All tables dropped")
     else:
-        logger.info("Skipping drop - keeping existing data")
+        logger.info("Skipping drop - keeping existing data (default)")
     
     logger.info("Creating database tables...")
     init_db()

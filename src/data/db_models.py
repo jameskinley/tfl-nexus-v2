@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Table, Text
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Table, Text, DateTime
 from sqlalchemy.orm import relationship, declarative_base
 from typing import Optional
 
@@ -195,7 +195,7 @@ class DisruptionEvent(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     disruption_id = Column(String, ForeignKey('disruptions.id'), nullable=False)
     event_type = Column(String, nullable=False)  # 'created', 'updated', 'escalated', 'resolved'
-    timestamp = Column(String, nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
     
     # Event context for ML features
     previous_category = Column(String, nullable=True)
@@ -216,7 +216,7 @@ class StationCrowding(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     station_id = Column(String, ForeignKey('stations.id'), nullable=False, index=True)
     line_id = Column(String, ForeignKey('lines.id'), nullable=True, index=True)
-    timestamp = Column(String, nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
     
     # Crowding metrics
     crowding_level = Column(String, nullable=True)  # 'low', 'moderate', 'high', 'very_high'
@@ -234,7 +234,7 @@ class NetworkReport(Base):
     __tablename__ = 'network_reports'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(String, nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
     report_type = Column(String, nullable=False)  # 'snapshot', 'daily_summary', 'incident'
     
     # Report data (JSON stored as text)
@@ -255,5 +255,5 @@ class PollingMeta(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     poll_type = Column(String, unique=True, nullable=False, index=True)
-    last_poll_timestamp = Column(String, nullable=False)
+    last_poll_timestamp = Column(DateTime, nullable=False)
     poll_interval_seconds = Column(Integer, nullable=False)

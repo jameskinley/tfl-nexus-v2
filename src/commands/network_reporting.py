@@ -51,7 +51,8 @@ class NetworkReportingCommand:
         Returns:
             Dictionary containing the report data and metadata
         """
-        timestamp = datetime.now().isoformat()
+        now = datetime.now()
+        timestamp = now.isoformat()
         self.logger.info(f"Generating {report_type} network report at {timestamp}")
         
         # Use default summarizer if none provided
@@ -168,8 +169,9 @@ class NetworkReportingCommand:
             
             # 7. Crowding summary (if available)
             try:
+                recent_threshold = datetime.now() - timedelta(minutes=30)
                 recent_crowding = self.db.query(StationCrowding).filter(
-                    StationCrowding.timestamp >= (datetime.now() - timedelta(minutes=30)).isoformat()
+                    StationCrowding.timestamp >= recent_threshold
                 ).all()
                 
                 if recent_crowding:
@@ -207,7 +209,7 @@ class NetworkReportingCommand:
             
             # Create database record
             network_report = NetworkReport(
-                timestamp=timestamp,
+                timestamp=now,
                 report_type=report_type,
                 report_data=json.dumps(report_data),
                 summary_text=summary_text,
@@ -260,11 +262,22 @@ class NetworkReportingCommand:
         query = self.db.query(NetworkReport)
         
         # Apply filters
+        # Parse string date filters into datetimes so comparisons use correct DB types
+        from dateutil import parser as _parser
+
         if start_date:
-            query = query.filter(NetworkReport.timestamp >= start_date)
-        
+            try:
+                sd = _parser.parse(start_date) if isinstance(start_date, str) else start_date
+                query = query.filter(NetworkReport.timestamp >= sd)
+            except Exception:
+                self.logger.warning("Invalid start_date filter: %s", start_date)
+
         if end_date:
-            query = query.filter(NetworkReport.timestamp <= end_date)
+            try:
+                ed = _parser.parse(end_date) if isinstance(end_date, str) else end_date
+                query = query.filter(NetworkReport.timestamp <= ed)
+            except Exception:
+                self.logger.warning("Invalid end_date filter: %s", end_date)
         
         if report_type:
             query = query.filter(NetworkReport.report_type == report_type)

@@ -35,6 +35,15 @@ def init_db():
     """Initialize the database by creating all tables"""
     logger.info("Initializing database...")
     Base.metadata.create_all(bind=engine)
+    # If using Postgres, attempt to upgrade any timestamp-like columns
+    try:
+        if engine.dialect.name == 'postgresql':
+            from .pg_migrations import upgrade_timestamp_columns
+
+            logger.info("Running Postgres timestamp column upgrades (if needed)")
+            upgrade_timestamp_columns(engine)
+    except Exception as e:
+        logger.warning("Postgres column upgrade step failed: %s", e)
     logger.info("Database initialized successfully")
 
 

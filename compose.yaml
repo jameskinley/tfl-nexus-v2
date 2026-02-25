@@ -5,7 +5,7 @@ services:
     build: .
     image: tfl-nexus-v2
     ports:
-      - "9000:9000"
+      - "9000:8003"
     env_file:
       - src/.env
 
