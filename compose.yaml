@@ -3,8 +3,18 @@ services:
     build: .
     image: tfl-nexus-v2
     ports:
-      - "8003:8003"
+      - "9000:9000"
     volumes:
       - ./src/tfl_nexus.db:/app/tfl_nexus.db:rw
     env_file:
       - src/.env
+
+
+  tfl-nexus-db:
+    image: postgres:latest
+    env_file:
+      - db.env
+    ports:
+      - "9001:5432"
+    volumes:
+      - ./src/tfl_nexus.db:/var/lib/postgresql/docker:rw
