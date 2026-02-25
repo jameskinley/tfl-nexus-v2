@@ -6,7 +6,7 @@ class HateoasBuilder:
     
     @staticmethod
     def build_links(self_href: str, additional_links: Optional[Dict[str, str]] = None, method: str = "GET") -> Links:
-        links_dict = {"self": Link(href=self_href, method=method)}
+        links_dict = {"self": Link(href=self_href, method=method, rel="self")}
         
         if additional_links:
             for rel, href in additional_links.items():
