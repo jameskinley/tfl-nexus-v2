@@ -8,8 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ /app/
 
-EXPOSE 8003
+EXPOSE 9000
+RUN apk add --no-cache curl
 
-ENTRYPOINT [ "fastapi", "run", "--port", "8003", "--host", "0.0.0.0"]
+ENTRYPOINT [ "python", "-u", "app.py" ]
 
-HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 CMD [ "curl", "-f", "http://localhost:8003/", "||", "exit", "1" ]
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 CMD "curl -f http://localhost:9000/ || exit 1"
