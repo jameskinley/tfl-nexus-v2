@@ -1,3 +1,5 @@
+name: tfl-nexus-v2
+
 services:
   tfl-nexus-api:
     build: .
@@ -9,7 +11,6 @@ services:
     env_file:
       - src/.env
 
-
   tfl-nexus-db:
     image: postgres:latest
     env_file:
@@ -17,4 +18,9 @@ services:
     ports:
       - "9001:5432"
     volumes:
-      - ./src/tfl_nexus.db:/var/lib/postgresql/docker:rw
+      - postgres_data:/var/lib/postgresql/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-U", "tfl", "-d", "tfl_nexus"]
+      interval: 1m
+      timeout: 5s
+      retries: 5
