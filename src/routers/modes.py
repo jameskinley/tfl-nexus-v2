@@ -49,10 +49,10 @@ async def list_modes() -> CollectionResponse[ModeData]:
         
         modes = [
             ModeData(
-                id=mode['id'],
-                name=mode['name'],
-                is_tfl_service=mode['is_tfl_service'],
-                is_scheduled_service=mode['is_scheduled_service']
+                id=getattr(mode, 'name', None) or getattr(mode, 'id', None) or str(mode),
+                name=getattr(mode, 'name', getattr(mode, 'name', None) or getattr(mode, 'name', None) or getattr(mode, 'name', None)) or getattr(mode, 'name', None) or getattr(mode, 'name', None) or (getattr(mode, 'name', None) if hasattr(mode, 'name') else str(mode)),
+                is_tfl_service=bool(getattr(mode, 'isTflService', False) or getattr(mode, 'is_tfl_service', False)),
+                is_scheduled_service=bool(getattr(mode, 'isScheduledService', False) or getattr(mode, 'is_scheduled_service', False))
             )
             for mode in modes_raw
         ]
@@ -87,16 +87,16 @@ async def get_mode(
         command = MetaOperationsCommand()
         modes_raw = command.get_modes()
         
-        mode_raw = next((m for m in modes_raw if m['id'] == mode_id), None)
+        mode_raw = next((m for m in modes_raw if (getattr(m, 'name', None) == mode_id) or (getattr(m, 'id', None) == mode_id)), None)
         
         if not mode_raw:
             raise HTTPException(status_code=404, detail=f"Mode '{mode_id}' not found")
         
         mode_data = ModeData(
-            id=mode_raw['id'],
-            name=mode_raw['name'],
-            is_tfl_service=mode_raw['is_tfl_service'],
-            is_scheduled_service=mode_raw['is_scheduled_service']
+            id=getattr(mode_raw, 'name', None) or getattr(mode_raw, 'id', None) or str(mode_raw),
+            name=getattr(mode_raw, 'name', None) or getattr(mode_raw, 'name', None) or str(mode_raw),
+            is_tfl_service=bool(getattr(mode_raw, 'isTflService', False) or getattr(mode_raw, 'is_tfl_service', False)),
+            is_scheduled_service=bool(getattr(mode_raw, 'isScheduledService', False) or getattr(mode_raw, 'is_scheduled_service', False))
         )
         
         self_href = f"/modes/{mode_id}"
