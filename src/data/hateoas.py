@@ -7,11 +7,11 @@ class HateoasBuilder:
     @staticmethod
     def build_links(self_href: str, additional_links: Optional[Dict[str, str]] = None, method: str = "GET") -> Links:
         links_dict = {"self": Link(href=self_href, method=method, rel="self")}
-        
+
         if additional_links:
             for rel, href in additional_links.items():
-                links_dict[rel] = Link(href=href, rel=rel)
-        
+                links_dict[rel] = Link(href=href, method=method, rel=rel)
+
         return Links(**links_dict)
     
     @staticmethod
@@ -29,9 +29,9 @@ class HateoasBuilder:
             return url
         
         links_dict = {
-            "self": Link(href=build_url(page)),
-            "first": Link(href=build_url(1)),
-            "last": Link(href=build_url(total_pages))
+            "self": Link(href=build_url(page), rel="self"),
+            "first": Link(href=build_url(1), rel="first"),
+            "last": Link(href=build_url(total_pages), rel="last")
         }
         
         if page > 1:
