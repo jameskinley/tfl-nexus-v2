@@ -1,16 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from typing import Any
 from data.database import get_db
 from commands.graph_operations import GraphOperationsCommand
 from commands.crowding_operations import CrowdingOperations
 from data.api_models import ResourceResponse, NetworkTopologyData, CrowdingData, CollectionResponse, PaginationMeta
 from data.hateoas import HateoasBuilder
 import logging
-
-router =APIRouter(prefix="/network", tags=["Network"])
+router = APIRouter(prefix="/network", tags=["Network"])
 logger = logging.getLogger(__name__)
-
 
 @router.get(
     "/topology",
@@ -66,7 +65,6 @@ async def get_network_visualization(
         logger.error(f"Error generating network visualization: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get(
     "/crowding",
     response_model=CollectionResponse[CrowdingData],
@@ -74,7 +72,7 @@ async def get_network_visualization(
     status_code=200
 )
 async def get_network_crowding(
-    db: Session = Depends(get_db)
+    db: Any = Depends(get_db)
 ) -> CollectionResponse[CrowdingData]:
     try:
         crowding_ops = CrowdingOperations(db)
@@ -82,7 +80,7 @@ async def get_network_crowding(
         
         crowding_list = [
             CrowdingData(
-                station_id=station_id,
+                station_id=station_id, #type: ignore
                 line_id=None,
                 crowding_level=None,
                 capacity_percentage=data['crowding_level'],
