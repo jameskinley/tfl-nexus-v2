@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from data.database import get_db
-from commands.ingestion_operations import IngestionOperationsCommand
+from commands import IngestionOperationsCommand
 from data.api_models import (
     ResourceResponse, CollectionResponse, DataImportJobData,
     CreateDataImportRequest, PaginationMeta

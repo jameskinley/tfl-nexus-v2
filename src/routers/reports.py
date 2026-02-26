@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
+from typing import Any
 from data.database import get_db
 from commands.network_reporting import NetworkReportingCommand
 from data.report_summarizer import get_summarizer
@@ -21,7 +22,6 @@ def _get_configured_summarizer():
     use_llm = os.getenv('USE_LLM_SUMMARIZER', 'false').lower() == 'true'
     return get_summarizer('llm' if use_llm else 'simple')
 
-
 @router.post(
     "",
     response_model=ResourceResponse[ReportData],
@@ -30,7 +30,7 @@ def _get_configured_summarizer():
 )
 async def create_report(
     request: CreateReportRequest,
-    db: Session = Depends(get_db)
+    db: Any = Depends(get_db)
 ) -> ResourceResponse[ReportData]:
     try:
         command = NetworkReportingCommand(db)
