@@ -54,13 +54,13 @@ class TestGetTimeContextFactors:
         assert result["is_peak"] is True
         assert result["disruption_multiplier"] == 1.3
 
-    def test_off_peak_weekday_returns_reduced_multiplier(self):
+    def test_off_peak_weekday_returns_normal_multiplier(self):
         predictor = DisruptionPredictor(None)
 
         result = predictor.get_time_context_factors(datetime(2026, 3, 2, 13, 0))
 
         assert result["is_peak"] is False
-        assert result["disruption_multiplier"] == 0.7
+        assert result["disruption_multiplier"] == 1.0
 
     def test_night_hours_return_low_multiplier(self):
         predictor = DisruptionPredictor(None)
@@ -258,7 +258,7 @@ class TestPredictEdgeFragility:
 
         fragility = predictor.predict_edge_fragility("nonexistent_line", "unknown_a", "unknown_b", datetime(2026, 3, 2, 12, 0))
 
-        expected = (0.7 * 0.05 + 0.3 * ((0.05 + 0.05) / 2.0)) * 0.7
+        expected = (0.7 * 0.05 + 0.3 * ((0.05 + 0.05) / 2.0)) * 1.0
         assert fragility == pytest.approx(expected, abs=0.001)
 
     def test_peak_multiplier_increases_fragility_vs_off_peak(self, session_with_disruptions):

@@ -55,7 +55,8 @@ class CrowdingPollingCommand:
         ).first()
         
         if poll_meta:
-            last_poll = datetime.fromisoformat(poll_meta.last_poll_timestamp) #type: ignore
+            raw_ts = poll_meta.last_poll_timestamp
+            last_poll = raw_ts if isinstance(raw_ts, datetime) else datetime.fromisoformat(str(raw_ts))
             time_since_poll = (timestamp - last_poll).total_seconds()
             
             if time_since_poll < poll_interval:
@@ -126,10 +127,12 @@ class CrowdingPollingCommand:
                 else:
                     level = 'very_high'
                 
+                raw_record_ts = crowding_info.get('timestamp') or stats['timestamp']
+                record_ts = raw_record_ts if isinstance(raw_record_ts, datetime) else datetime.fromisoformat(str(raw_record_ts))
                 crowding_record = StationCrowding(
                     station_id=station_id,
                     line_id=None,
-                    timestamp=crowding_info.get('timestamp') or stats['timestamp'],
+                    timestamp=record_ts,
                     crowding_level=level,
                     capacity_percentage=crowding_percentage,
                     time_slice='live',
@@ -140,11 +143,11 @@ class CrowdingPollingCommand:
                 stats['records_created'] += 1
             
             if poll_meta:
-                poll_meta.last_poll_timestamp = timestamp.isoformat() #type: ignore
+                poll_meta.last_poll_timestamp = timestamp
             else:
                 poll_meta = PollingMeta(
                     poll_type='crowding',
-                    last_poll_timestamp=timestamp.isoformat(),
+                    last_poll_timestamp=timestamp,
                     poll_interval_seconds=poll_interval
                 )
                 self.db.add(poll_meta)
@@ -174,7 +177,7 @@ class CrowdingPollingCommand:
         Args:
             days: Number of days to retain
         """
-        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+        cutoff_date = datetime.now() - timedelta(days=days)
         
         try:
             deleted = self.db.query(StationCrowding).filter(
@@ -207,7 +210,7 @@ class CrowdingPollingCommand:
         Returns:
             List of StationCrowding records
         """
-        cutoff_time = (datetime.now() - timedelta(minutes=minutes)).isoformat()
+        cutoff_time = datetime.now() - timedelta(minutes=minutes)
         
         query = self.db.query(StationCrowding).filter(
             StationCrowding.timestamp >= cutoff_time

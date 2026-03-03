@@ -1,3 +1,9 @@
+import os
+
+os.environ["DATABASE_URL"] = "sqlite:///test_tfl.db"
+for _var in ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME"):
+    os.environ.pop(_var, None)
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session

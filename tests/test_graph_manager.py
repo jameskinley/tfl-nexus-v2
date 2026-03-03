@@ -322,10 +322,8 @@ class TestFindPathWithChangePenalty:
 
     def test_no_path_raises_networkx_exception(self):
         gm = GraphManager()
-        gm.graph.add_node("isolated_a")
-        gm.graph.add_node("isolated_b")
         gm.graph.add_edge("isolated_a", "isolated_b", line="central", time_distance=5.0, base_time=5.0, fragility=0.0, mode="tube", schedules={})
-        gm.graph.add_node("isolated_c")
+        gm.graph.add_edge("isolated_c", "isolated_d", line="victoria", time_distance=5.0, base_time=5.0, fragility=0.0, mode="tube", schedules={})
 
         with pytest.raises(nx.NetworkXNoPath):
             gm.find_path_with_change_penalty("isolated_a", "isolated_c")

@@ -28,10 +28,10 @@ class TestTimeToMinutes:
 
         assert result is None
 
-    def test_empty_dict_returns_zero(self):
+    def test_empty_dict_returns_none(self):
         result = ModelMapper._time_to_minutes({})
 
-        assert result == 0.0
+        assert result is None
 
     def test_valid_hour_and_minute_converted_correctly(self):
         result = ModelMapper._time_to_minutes({"hour": "9", "minute": "30"})

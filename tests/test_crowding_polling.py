@@ -34,7 +34,7 @@ def seeded_session(db_session):
 
 class TestPollAndUpdateRateLimit:
     def test_skipped_when_polled_within_900_seconds(self, seeded_session):
-        recent_time = (datetime.now() - timedelta(seconds=300)).isoformat()
+        recent_time = datetime.now() - timedelta(seconds=300)
         seeded_session.add(PollingMeta(
             poll_type="crowding",
             last_poll_timestamp=recent_time,
@@ -50,7 +50,7 @@ class TestPollAndUpdateRateLimit:
         assert result.get("skipped") is True
 
     def test_not_skipped_when_poll_interval_exceeded(self, seeded_session):
-        old_time = (datetime.now() - timedelta(seconds=1800)).isoformat()
+        old_time = datetime.now() - timedelta(seconds=1800)
         seeded_session.add(PollingMeta(
             poll_type="crowding",
             last_poll_timestamp=old_time,
