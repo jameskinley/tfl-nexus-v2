@@ -1,0 +1,2570 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TfL Nexus API",
+    "description": "\n# Transport for London Network Intelligence API\n\nA comprehensive RESTful API for analyzing, routing, and monitoring the Transport for London network \nwith real-time disruption tracking, intelligent journey planning, and network health reporting.\n\n## Key Features\n\n* **Intelligent Journey Planning**: True REST resource-based journey queries\n* **Real-time Disruptions**: Automatic polling and storage of service disruptions\n* **Network Analysis**: Graph-based network analysis and visualization\n* **Crowding Information**: Real-time crowding data for stations and lines\n* **AI-Powered Reports**: Optional LLM-generated network status summaries\n* **HATEOAS Support**: Hypermedia links for API discoverability\n\n## RESTful Design\n\nThis API follows REST principles with:\n- Resources identified by URLs\n- Standard HTTP methods (GET, POST, PUT, DELETE)\n- Hypermedia links (HATEOAS) for navigation\n- Consistent response formats with metadata\n- Proper status codes\n\n## Data Sources\n\nAll data is sourced from the official Transport for London (TfL) Unified API.\n    ",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/journeys/{origin}/to/{destination}": {
+      "get": {
+        "tags": [
+          "Journeys"
+        ],
+        "summary": "Get Journey Between Stations",
+        "operationId": "get_journey_journeys__origin__to__destination__get",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "destination",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Destination"
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Time in HH:MM format or ISO 8601",
+              "title": "Time"
+            },
+            "description": "Time in HH:MM format or ISO 8601"
+          },
+          {
+            "name": "strategy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(fastest|robust|low_crowding|ml_hybrid)$",
+              "default": "fastest",
+              "title": "Strategy"
+            }
+          },
+          {
+            "name": "alternatives",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include alternative route strategies",
+              "default": false,
+              "title": "Alternatives"
+            },
+            "description": "Include alternative route strategies"
+          },
+          {
+            "name": "max_changes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 5,
+                  "minimum": 0
+                }
+              ],
+              "description": "Maximum number of line changes",
+              "title": "Max Changes"
+            },
+            "description": "Maximum number of line changes"
+          },
+          {
+            "name": "accessible",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Wheelchair accessible routes only",
+              "default": false,
+              "title": "Accessible"
+            },
+            "description": "Wheelchair accessible routes only"
+          },
+          {
+            "name": "avoid_lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Comma-separated line IDs to avoid",
+              "title": "Avoid Lines"
+            },
+            "description": "Comma-separated line IDs to avoid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_JourneyData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journeys": {
+      "get": {
+        "tags": [
+          "Journeys"
+        ],
+        "summary": "List Available Routing Strategies",
+        "operationId": "list_routing_strategies_journeys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_RoutingStrategyData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lines": {
+      "get": {
+        "tags": [
+          "Lines"
+        ],
+        "summary": "List All Lines",
+        "operationId": "list_lines_lines_get",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by transport mode",
+              "title": "Mode"
+            },
+            "description": "Filter by transport mode"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_LineData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lines/{line_id}": {
+      "get": {
+        "tags": [
+          "Lines"
+        ],
+        "summary": "Get Line Details",
+        "operationId": "get_line_lines__line_id__get",
+        "parameters": [
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Line ID",
+              "title": "Line Id"
+            },
+            "description": "Line ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_LineData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lines/{line_id}/stations": {
+      "get": {
+        "tags": [
+          "Lines"
+        ],
+        "summary": "Get Stations on Line",
+        "operationId": "get_line_stations_lines__line_id__stations_get",
+        "parameters": [
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Line ID",
+              "title": "Line Id"
+            },
+            "description": "Line ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_StationData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lines/{line_id}/disruptions": {
+      "get": {
+        "tags": [
+          "Lines"
+        ],
+        "summary": "Get Disruptions for Line",
+        "operationId": "get_line_disruptions_lines__line_id__disruptions_get",
+        "parameters": [
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Line ID",
+              "title": "Line Id"
+            },
+            "description": "Line ID"
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Filter active disruptions only",
+              "default": true,
+              "title": "Active"
+            },
+            "description": "Filter active disruptions only"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_DisruptionData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "List or Search Stations",
+        "operationId": "list_stations_stations_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+                
+              ],
+              "description": "Search query for station name",
+              "title": "Q"
+            },
+            "description": "Search query for station name"
+          },
+          {
+            "name": "line_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by line ID",
+              "title": "Line Id"
+            },
+            "description": "Filter by line ID"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by transport mode",
+              "title": "Mode"
+            },
+            "description": "Filter by transport mode"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_StationData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{station_id}": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Get Station Details",
+        "operationId": "get_station_stations__station_id__get",
+        "parameters": [
+          {
+            "name": "station_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Station ID or name",
+              "title": "Station Id"
+            },
+            "description": "Station ID or name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_StationData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{station_id}/lines": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Get Lines Serving Station",
+        "operationId": "get_station_lines_stations__station_id__lines_get",
+        "parameters": [
+          {
+            "name": "station_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Station ID",
+              "title": "Station Id"
+            },
+            "description": "Station ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_LineData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{station_id}/crowding": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Get Station Crowding Data",
+        "operationId": "get_station_crowding_stations__station_id__crowding_get",
+        "parameters": [
+          {
+            "name": "station_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Station ID",
+              "title": "Station Id"
+            },
+            "description": "Station ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_CrowdingData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{station_id}/connections": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Get Connected Stations",
+        "operationId": "get_station_connections_stations__station_id__connections_get",
+        "parameters": [
+          {
+            "name": "station_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Station ID",
+              "title": "Station Id"
+            },
+            "description": "Station ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_StationData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/disruptions": {
+      "get": {
+        "tags": [
+          "Disruptions"
+        ],
+        "summary": "List All Disruptions",
+        "operationId": "list_disruptions_disruptions_get",
+        "parameters": [
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Filter active disruptions only",
+              "default": true,
+              "title": "Active"
+            },
+            "description": "Filter active disruptions only"
+          },
+          {
+            "name": "line_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by line ID",
+              "title": "Line Id"
+            },
+            "description": "Filter by line ID"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by disruption category",
+              "title": "Category"
+            },
+            "description": "Filter by disruption category"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by severity",
+              "title": "Severity"
+            },
+            "description": "Filter by severity"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter disruptions from this date (ISO format)",
+              "title": "Start Date"
+            },
+            "description": "Filter disruptions from this date (ISO format)"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_DisruptionData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/disruptions/{disruption_id}": {
+      "get": {
+        "tags": [
+          "Disruptions"
+        ],
+        "summary": "Get Disruption Details",
+        "operationId": "get_disruption_disruptions__disruption_id__get",
+        "parameters": [
+          {
+            "name": "disruption_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Disruption ID",
+              "title": "Disruption Id"
+            },
+            "description": "Disruption ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_DisruptionData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/disruptions/{disruption_id}/affected-stations": {
+      "get": {
+        "tags": [
+          "Disruptions"
+        ],
+        "summary": "Get Stations Affected by Disruption",
+        "operationId": "get_disruption_affected_stations_disruptions__disruption_id__affected_stations_get",
+        "parameters": [
+          {
+            "name": "disruption_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Disruption ID",
+              "title": "Disruption Id"
+            },
+            "description": "Disruption ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_StationData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Generate Network Report",
+        "operationId": "create_report_reports_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_ReportData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "List Network Reports",
+        "operationId": "list_reports_reports_get",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "ISO format start date",
+              "title": "Start Date"
+            },
+            "description": "ISO format start date"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "ISO format end date",
+              "title": "End Date"
+            },
+            "description": "ISO format end date"
+          },
+          {
+            "name": "report_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Filter by report type",
+              "title": "Report Type"
+            },
+            "description": "Filter by report type"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Per Page"
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_ReportData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{report_id}": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Report Details",
+        "operationId": "get_report_reports__report_id__get",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Report ID",
+              "title": "Report Id"
+            },
+            "description": "Report ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_ReportData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Delete Report",
+        "operationId": "delete_report_reports__report_id__delete",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Report ID",
+              "title": "Report Id"
+            },
+            "description": "Report ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/network/topology": {
+      "get": {
+        "tags": [
+          "Network"
+        ],
+        "summary": "Get Network Topology Metrics",
+        "operationId": "get_network_topology_network_topology_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_NetworkTopologyData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/network/topology/visualization": {
+      "get": {
+        "tags": [
+          "Network"
+        ],
+        "summary": "Get Network Topology Visualization",
+        "operationId": "get_network_visualization_network_topology_visualization_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/network/crowding": {
+      "get": {
+        "tags": [
+          "Network"
+        ],
+        "summary": "Get Network-Wide Crowding Data",
+        "operationId": "get_network_crowding_network_crowding_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_CrowdingData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-imports": {
+      "get": {
+        "tags": [
+          "Data Imports"
+        ],
+        "summary": "List Data Import Jobs",
+        "operationId": "list_data_imports_data_imports_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_DataImportJobData_"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Data Imports"
+        ],
+        "summary": "Start Data Import Job",
+        "operationId": "create_data_import_data_imports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDataImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_DataImportJobData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-imports/{job_id}": {
+      "get": {
+        "tags": [
+          "Data Imports"
+        ],
+        "summary": "Get Data Import Job Status",
+        "operationId": "get_data_import_status_data_imports__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_DataImportJobData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_system_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_HealthData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/statistics": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get System Statistics",
+        "operationId": "get_system_statistics_system_statistics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_SystemStatisticsData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/disruption-categories": {
+      "get": {
+        "tags": [
+          "Reference Data"
+        ],
+        "summary": "List Disruption Categories",
+        "operationId": "list_disruption_categories_disruption_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_DisruptionCategoriesData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/modes": {
+      "get": {
+        "tags": [
+          "Reference Data"
+        ],
+        "summary": "List Transport Modes",
+        "operationId": "list_modes_modes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResponse_ModeData_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/modes/{mode_id}": {
+      "get": {
+        "tags": [
+          "Reference Data"
+        ],
+        "summary": "Get Transport Mode Details",
+        "operationId": "get_mode_modes__mode_id__get",
+        "parameters": [
+          {
+            "name": "mode_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Mode ID",
+              "title": "Mode Id"
+            },
+            "description": "Mode ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceResponse_ModeData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "API Root",
+        "operationId": "root_handler__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CollectionResponse_CrowdingData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CrowdingData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[CrowdingData]"
+      },
+      "CollectionResponse_DataImportJobData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DataImportJobData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[DataImportJobData]"
+      },
+      "CollectionResponse_DisruptionData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DisruptionData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[DisruptionData]"
+      },
+      "CollectionResponse_LineData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/LineData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[LineData]"
+      },
+      "CollectionResponse_ModeData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ModeData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[ModeData]"
+      },
+      "CollectionResponse_ReportData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ReportData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[ReportData]"
+      },
+      "CollectionResponse_RoutingStrategyData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RoutingStrategyData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[RoutingStrategyData]"
+      },
+      "CollectionResponse_StationData_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/StationData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ],
+        "title": "CollectionResponse[StationData]"
+      },
+      "CreateDataImportRequest": {
+        "properties": {
+          "full_refresh": {
+            "type": "boolean",
+            "title": "Full Refresh",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "CreateDataImportRequest"
+      },
+      "CreateReportRequest": {
+        "properties": {
+          "report_type": {
+            "type": "string",
+            "pattern": "^(snapshot|daily_summary|incident)$",
+            "title": "Report Type",
+            "default": "snapshot"
+          }
+        },
+        "type": "object",
+        "title": "CreateReportRequest"
+      },
+      "CrowdingData": {
+        "properties": {
+          "station_id": {
+            "type": "string",
+            "title": "Station Id"
+          },
+          "line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Line Id"
+          },
+          "crowding_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Crowding Level"
+          },
+          "capacity_percentage": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Capacity Percentage"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "station_id",
+          "timestamp"
+        ],
+        "title": "CrowdingData"
+      },
+      "DataImportJobData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Error"
+          },
+          "progress_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Progress Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "DataImportJobData"
+      },
+      "DisruptionCategoriesData": {
+        "properties": {
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categories"
+        ],
+        "title": "DisruptionCategoriesData"
+      },
+      "DisruptionData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "line_id": {
+            "type": "string",
+            "title": "Line Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "category_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Category Description"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Summary"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Description"
+          },
+          "additional_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Additional Info"
+          },
+          "created": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Created"
+          },
+          "last_update": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Last Update"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "affected_stops_count": {
+            "type": "integer",
+            "title": "Affected Stops Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "line_id",
+          "type",
+          "category"
+        ],
+        "title": "DisruptionData"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthData": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "HealthData"
+      },
+      "JourneyData": {
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/StationData"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/StationData"
+          },
+          "requested_time": {
+            "type": "string",
+            "title": "Requested Time"
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "primary_route": {
+            "$ref": "#/components/schemas/JourneyRoute"
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/JourneyRoute"
+            },
+            "type": "array",
+            "title": "Alternatives"
+          }
+        },
+        "type": "object",
+        "required": [
+          "origin",
+          "destination",
+          "requested_time",
+          "strategy",
+          "primary_route"
+        ],
+        "title": "JourneyData"
+      },
+      "JourneyRoute": {
+        "properties": {
+          "total_time_minutes": {
+            "type": "number",
+            "title": "Total Time Minutes"
+          },
+          "total_stops": {
+            "type": "integer",
+            "title": "Total Stops"
+          },
+          "changes": {
+            "type": "integer",
+            "title": "Changes"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/RouteSegment"
+            },
+            "type": "array",
+            "title": "Segments"
+          },
+          "has_disruptions": {
+            "type": "boolean",
+            "title": "Has Disruptions",
+            "default": false
+          },
+          "disruption_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Disruption Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_time_minutes",
+          "total_stops",
+          "changes",
+          "segments"
+        ],
+        "title": "JourneyRoute"
+      },
+      "LineData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "mode"
+        ],
+        "title": "LineData"
+      },
+      "Link": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "default": "GET"
+          },
+          "rel": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Rel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "href"
+        ],
+        "title": "Link"
+      },
+      "Links": {
+        "properties": {
+          "self": {
+            "$ref": "#/components/schemas/Link"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "self"
+        ],
+        "title": "Links"
+      },
+      "ModeData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_tfl_service": {
+            "type": "boolean",
+            "title": "Is Tfl Service"
+          },
+          "is_scheduled_service": {
+            "type": "boolean",
+            "title": "Is Scheduled Service"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_tfl_service",
+          "is_scheduled_service"
+        ],
+        "title": "ModeData"
+      },
+      "NetworkTopologyData": {
+        "properties": {
+          "nodes": {
+            "type": "integer",
+            "title": "Nodes"
+          },
+          "edges": {
+            "type": "integer",
+            "title": "Edges"
+          },
+          "average_degree": {
+            "type": "number",
+            "title": "Average Degree"
+          },
+          "connected_components": {
+            "type": "integer",
+            "title": "Connected Components"
+          },
+          "network_health": {
+            "type": "string",
+            "title": "Network Health"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nodes",
+          "edges",
+          "average_degree",
+          "connected_components",
+          "network_health"
+        ],
+        "title": "NetworkTopologyData"
+      },
+      "PaginationMeta": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "default": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "title": "Per Page",
+            "default": 50
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "count",
+          "total_pages"
+        ],
+        "title": "PaginationMeta"
+      },
+      "ReportData": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "report_type": {
+            "type": "string",
+            "title": "Report Type"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "total_disruptions": {
+            "type": "integer",
+            "title": "Total Disruptions"
+          },
+          "active_lines_count": {
+            "type": "integer",
+            "title": "Active Lines Count"
+          },
+          "affected_lines_count": {
+            "type": "integer",
+            "title": "Affected Lines Count"
+          },
+          "graph_connectivity_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Graph Connectivity Score"
+          },
+          "average_reliability_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Average Reliability Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "timestamp",
+          "report_type",
+          "summary",
+          "total_disruptions",
+          "active_lines_count",
+          "affected_lines_count"
+        ],
+        "title": "ReportData"
+      },
+      "ResourceResponse_DataImportJobData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DataImportJobData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[DataImportJobData]"
+      },
+      "ResourceResponse_DisruptionCategoriesData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DisruptionCategoriesData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[DisruptionCategoriesData]"
+      },
+      "ResourceResponse_DisruptionData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DisruptionData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[DisruptionData]"
+      },
+      "ResourceResponse_HealthData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/HealthData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[HealthData]"
+      },
+      "ResourceResponse_JourneyData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JourneyData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[JourneyData]"
+      },
+      "ResourceResponse_LineData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LineData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[LineData]"
+      },
+      "ResourceResponse_ModeData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ModeData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[ModeData]"
+      },
+      "ResourceResponse_NetworkTopologyData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NetworkTopologyData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[NetworkTopologyData]"
+      },
+      "ResourceResponse_ReportData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReportData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[ReportData]"
+      },
+      "ResourceResponse_StationData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/StationData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[StationData]"
+      },
+      "ResourceResponse_SystemStatisticsData_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SystemStatisticsData"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "links"
+        ],
+        "title": "ResourceResponse[SystemStatisticsData]"
+      },
+      "RouteSegment": {
+        "properties": {
+          "station": {
+            "$ref": "#/components/schemas/StationData"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Line"
+          },
+          "arrival_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Arrival Time"
+          },
+          "departure_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Departure Time"
+          },
+          "wait_time_minutes": {
+            "type": "number",
+            "title": "Wait Time Minutes",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "station"
+        ],
+        "title": "RouteSegment"
+      },
+      "RoutingStrategyData": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "priority"
+        ],
+        "title": "RoutingStrategyData"
+      },
+      "StationData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Lon"
+          },
+          "modes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "StationData"
+      },
+      "SystemStatisticsData": {
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "title": "Lines"
+          },
+          "routes": {
+            "type": "integer",
+            "title": "Routes"
+          },
+          "stations": {
+            "type": "integer",
+            "title": "Stations"
+          },
+          "schedules": {
+            "type": "integer",
+            "title": "Schedules"
+          },
+          "disruptions": {
+            "type": "integer",
+            "title": "Disruptions"
+          },
+          "last_updated": {
+            "anyOf": [
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Last Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines",
+          "routes",
+          "stations",
+          "schedules",
+          "disruptions"
+        ],
+        "title": "SystemStatisticsData"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Journeys",
+      "description": "Journey planning between stations with multiple optimization strategies. Request journey plans as resources using natural semantics."
+    },
+    {
+      "name": "Lines",
+      "description": "Transport line information including routes, schedules, and disruption status. Access details for tube, overground, DLR, and other TfL lines."
+    },
+    {
+      "name": "Stations",
+      "description": "Station search and information including connectivity, crowding, and graph status. Query station details and relationships."
+    },
+    {
+      "name": "Disruptions",
+      "description": "Service disruption tracking and analysis with historical data. Query disruptions across the network with flexible filtering."
+    },
+    {
+      "name": "Reports",
+      "description": "Network status reports with AI-powered summaries and historical tracking. Generate, retrieve, and manage network health reports."
+    },
+    {
+      "name": "Network",
+      "description": "Transport network topology and analysis including graph metrics and visualization. Access network-wide crowding information."
+    },
+    {
+      "name": "Data Imports",
+      "description": "Data import job management for loading TfL network data. Monitor import progress and status."
+    },
+    {
+      "name": "System",
+      "description": "System health, statistics, and operational metrics. Monitor database state and service availability."
+    },
+    {
+      "name": "Reference Data",
+      "description": "Reference data including transport modes and disruption categories. Access metadata from TfL API."
+    }
+  ]
+}

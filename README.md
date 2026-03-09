@@ -5,7 +5,7 @@ A comprehensive Transport for London (TfL) data ingestion and routing system wit
 ## Features
 
 - ✅ **Complete TfL API Integration**: Fetch lines, routes, stations, and timetables
-- ✅ **SQLAlchemy ORM**: Code-first database with SQLite support (easily switchable to PostgreSQL)
+- ✅ **SQLAlchemy ORM**: Code-first database with PostgreSQL support (SQLite also supported)
 - ✅ **Timetable Support**: Full schedule and timing data for accurate route planning
 - ✅ **Mapper Pattern**: Clean separation between API models and database models
 - ✅ **FastAPI REST API**: Modern async web framework with automatic documentation
@@ -14,6 +14,7 @@ A comprehensive Transport for London (TfL) data ingestion and routing system wit
 - ✅ **Disruption Analysis**: Bayesian-based reliability scoring from historical disruptions
 - ✅ **Network Reports**: Automated report generation with optional LLM summarization
 - ✅ **Crowding Data**: Real-time crowding metrics from TfL API
+- ✅ **MCP Server**: AI assistant integration via the Model Context Protocol (port 9002)
 
 ## Architecture
 
@@ -31,6 +32,8 @@ TfL API → TflClient → API Models (models.py) → Mapper → DB Models (db_mo
 5. **[src/data/database.py](src/data/database.py)**: Database configuration and session management
 6. **[src/data/data_ingest.py](src/data/data_ingest.py)**: Data ingestion orchestration
 7. **[src/app.py](src/app.py)**: FastAPI application with REST endpoints
+8. **[src/mcp_provider.py](src/mcp_provider.py)**: FastMCP server instance (port 9002)
+9. **[src/adapters/](src/adapters/)**: MCP tool implementations wrapping core commands
 
 ## Database Schema
 
@@ -65,6 +68,20 @@ TfL API → TflClient → API Models (models.py) → Mapper → DB Models (db_mo
 
 ### Setup
 
+#### Option A — Docker Compose (recommended)
+
+```bash
+cp db.env.example db.env   # configure Postgres credentials
+docker compose up --build
+```
+
+Services started:
+- REST API → http://localhost:9000
+- MCP Server → http://localhost:9002/sse
+- PostgreSQL → localhost:9001
+
+#### Option B — Local Python
+
 1. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
@@ -80,19 +97,20 @@ TfL API → TflClient → API Models (models.py) → Mapper → DB Models (db_mo
    python src/init_db.py --no-drop
    ```
 
-3. **Start the API server**:
+3. **Start the API + MCP server**:
    ```bash
-   uvicorn src.app:app --reload
+   python src/app.py
    ```
+   This starts both the REST API (port 9000) and the MCP server (port 9002) together.
 
 4. **Ingest TfL data** (runs as background task, takes 5-10 minutes):
    ```bash
-   curl -X POST http://localhost:8000/route/ingest
+   curl -X POST http://localhost:9000/route/ingest
    ```
 
 5. **Check ingestion progress**:
    ```bash
-   curl http://localhost:8000/route/ingest/status
+   curl http://localhost:9000/route/ingest/status
    ```
 
 ## API Endpoints
@@ -125,11 +143,47 @@ TfL API → TflClient → API Models (models.py) → Mapper → DB Models (db_mo
 ### Future Endpoints
 - `GET /route/{from}/{to}` - Calculate route between stations (TODO)
 
+## MCP Server (AI Assistant Integration)
+
+TfL Nexus includes an **MCP (Model Context Protocol)** server that lets AI assistants (Claude, GitHub Copilot, etc.) call live TfL data tools directly.
+
+The MCP server runs on **port 9002** (SSE transport) alongside the REST API.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `plan_route` | Calculate the best route between two stations with configurable strategy |
+| `get_network_crowding` | Retrieve live crowding heatmap across all monitored stations |
+| `generate_network_report` | Generate and persist a network status report |
+
+### Quick Connect
+
+**Claude Desktop** — add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "tfl-nexus": { "url": "http://localhost:9002/sse" }
+  }
+}
+```
+
+**VS Code / GitHub Copilot** — add to `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "tfl-nexus": { "type": "sse", "url": "http://localhost:9002/sse" }
+  }
+}
+```
+
+See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) for full parameter reference, example responses, and environment variable configuration.
+
 ## API Documentation
 
 Once the server is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: http://localhost:9000/docs
+- **ReDoc**: http://localhost:9000/redoc
 
 ## Usage Examples
 
@@ -139,24 +193,24 @@ Once the server is running, visit:
 python src/init_db.py
 
 # Start ingestion (background task)
-curl -X POST http://localhost:8000/route/ingest
+curl -X POST http://localhost:9000/route/ingest
 
 # Check status
-curl http://localhost:8000/route/ingest/status
+curl http://localhost:9000/route/ingest/status
 ```
 
 ### 2. Query Lines
 ```bash
 # Get all lines
-curl http://localhost:8000/line
+curl http://localhost:9000/line
 
 # Get specific line with routes and timetables
-curl http://localhost:8000/line/piccadilly
+curl http://localhost:9000/line/piccadilly
 ```
 
 ### 3. Check Database Stats
 ```bash
-curl http://localhost:8000/stats
+curl http://localhost:9000/stats
 ```
 
 ### 4. Query Schedules (Python example)
@@ -209,20 +263,35 @@ cp .env.example .env
 ### Project Structure
 ```
 tfl-nexus-v2/
-├── data/
-│   └── Stops.csv              # NaPTAN lookup data
+├── docs/
+│   ├── openapi.json           # OpenAPI specification
+│   └── MCP_TOOLS.md          # MCP tool reference documentation
 ├── src/
-│   ├── app.py                 # FastAPI application
-│   ├── init_db.py            # Database initialization script
-│   └── data/
-│       ├── tfl_client.py     # TfL API client
-│       ├── models.py         # API models (Pydantic)
-│       ├── db_models.py      # Database models (SQLAlchemy)
-│       ├── mapper.py         # Model conversion layer
-│       ├── database.py       # Database configuration
-│       └── data_ingest.py    # Data ingestion pipeline
+│   ├── app.py                 # FastAPI + MCP server entrypoint
+│   ├── app_provider.py        # FastAPI app factory
+│   ├── mcp_provider.py        # FastMCP server instance
+│   ├── init_db.py             # Database initialisation script
+│   ├── adapters/              # MCP tool implementations
+│   │   ├── journeys_adapter.py   # plan_route tool
+│   │   ├── network_adapter.py    # get_network_crowding tool
+│   │   └── reports_adapter.py    # generate_network_report tool
+│   ├── commands/              # Business logic command layer
+│   ├── data/
+│   │   ├── tfl_client.py     # TfL API client
+│   │   ├── models.py         # API models (Pydantic)
+│   │   ├── api_models.py     # Shared API response models
+│   │   ├── db_models.py      # Database models (SQLAlchemy)
+│   │   ├── mapper.py         # Model conversion layer
+│   │   ├── database.py       # Database configuration
+│   │   └── data_ingest.py    # Data ingestion pipeline
+│   ├── graph/                 # Graph-based routing engine
+│   ├── llm/                   # LLM integration (OpenRouter)
+│   ├── routers/               # FastAPI route handlers
+│   └── tasks/                 # Background tasks (crowding, disruptions)
+├── tests/                     # Pytest test suite
+├── compose.yaml               # Docker Compose configuration
 ├── requirements.txt           # Python dependencies
-└── README.md                 # This file
+└── README.md                  # This file
 ```
 
 ### Reset Database

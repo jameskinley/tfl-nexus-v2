@@ -52,6 +52,7 @@ tags_metadata = [
 
 app = FastAPI(
     title="TfL Nexus API",
+    openapi_version="3.0.0",
     description="""
 # Transport for London Network Intelligence API
 
