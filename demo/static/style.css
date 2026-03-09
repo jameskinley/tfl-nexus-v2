@@ -1,0 +1,278 @@
+/* ─── Reset & tokens ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue:        #007AFF;
+  --green:       #34C759;
+  --bubble-me:   #007AFF;
+  --bubble-them: #E8E8ED;
+  --text-me:     #ffffff;
+  --text-them:   #1c1c1e;
+  --bg:          #F2F2F7;
+  --surface:     #ffffff;
+  --border:      rgba(60, 60, 67, 0.18);
+  --muted:       #8E8E93;
+  --font:        -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --radius-bubble: 18px;
+  --radius-shell:  20px;
+}
+
+/* ─── Layout ──────────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font);
+  background: #1c1c1e;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell {
+  width: 100%;
+  max-width: 420px;
+  height: 100dvh;
+  max-height: 860px;
+  padding: 0;
+  display: flex;
+}
+
+.container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: var(--radius-shell);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #0a84ff, #30b0c7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35);
+}
+
+.contact-info h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-them);
+  letter-spacing: -0.2px;
+}
+
+.contact-info p {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.status-dot {
+  margin-left: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.25);
+  flex-shrink: 0;
+}
+
+/* ─── Thread ──────────────────────────────────────────────────────────────── */
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  scroll-behavior: smooth;
+}
+
+.thread::-webkit-scrollbar { width: 3px; }
+.thread::-webkit-scrollbar-track { background: transparent; }
+.thread::-webkit-scrollbar-thumb { background: #c7c7cc; border-radius: 99px; }
+
+/* ─── Message wrapper ─────────────────────────────────────────────────────── */
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 76%;
+  animation: pop-in 0.18s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+.message.me   { align-self: flex-end;   align-items: flex-end; }
+.message.them { align-self: flex-start; align-items: flex-start; }
+
+/* Tighten gap when the same sender sends multiple in a row */
+.message.me   + .message.me,
+.message.them + .message.them { margin-top: 1px; }
+
+/* ─── Bubbles ─────────────────────────────────────────────────────────────── */
+.bubble {
+  padding: 9px 14px;
+  border-radius: var(--radius-bubble);
+  font-size: 15px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* Tail: bottom corner flattened on the "sending" side */
+.message.me .bubble {
+  background: var(--bubble-me);
+  color: var(--text-me);
+  border-bottom-right-radius: 5px;
+}
+
+.message.them .bubble {
+  background: var(--bubble-them);
+  color: var(--text-them);
+  border-bottom-left-radius: 5px;
+}
+
+/* Reduce corner radius for consecutive bubbles from the same sender */
+.message.me   + .message.me   .bubble { border-top-right-radius: 6px; }
+.message.them + .message.them .bubble { border-top-left-radius: 6px; }
+
+/* ─── Timestamp ───────────────────────────────────────────────────────────── */
+.timestamp {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  padding: 0 4px;
+  letter-spacing: 0.1px;
+}
+
+/* ─── Date divider ────────────────────────────────────────────────────────── */
+.date-divider {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 10px 0 6px;
+  letter-spacing: 0.1px;
+}
+
+/* ─── Typing indicator ────────────────────────────────────────────────────── */
+.typing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 16px;
+  background: var(--bubble-them);
+  border-radius: var(--radius-bubble);
+  border-bottom-left-radius: 5px;
+  align-self: flex-start;
+  animation: pop-in 0.18s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+.typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: bounce 1.3s ease-in-out infinite;
+}
+.typing span:nth-child(2) { animation-delay: 0.18s; }
+.typing span:nth-child(3) { animation-delay: 0.36s; }
+
+/* ─── Input bar ───────────────────────────────────────────────────────────── */
+.input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px 14px;
+  background: var(--surface);
+  border-top: 0.5px solid var(--border);
+  flex-shrink: 0;
+}
+
+.input-wrap {
+  flex: 1;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 22px;
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.15s ease;
+}
+
+.input-wrap:focus-within {
+  border-color: var(--blue);
+}
+
+#msg-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--text-them);
+  outline: none;
+  resize: none;
+  line-height: 1.4;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+#msg-input::placeholder { color: var(--muted); }
+
+#send-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--blue);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, transform 0.1s ease, background 0.15s ease;
+  color: white;
+}
+
+#send-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+#send-btn:not(:disabled):hover  { background: #0062cc; }
+#send-btn:not(:disabled):active { transform: scale(0.88); }
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.88) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-5px); }
+}
+
+/* ─── Responsive: full-screen on narrow viewports ─────────────────────────── */
+@media (max-width: 440px) {
+  .shell      { max-height: none; }
+  .container  { border-radius: 0; }
+}
