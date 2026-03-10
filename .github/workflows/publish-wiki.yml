@@ -25,7 +25,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install openapi-to-md
-        run: pip install openapi-to-md
+        run: |
+          pip install openapi-to-md
+          pip install requests
 
       - name: Prepare wiki staging area
         run: mkdir -p wiki_output
