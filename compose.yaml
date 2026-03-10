@@ -10,6 +10,18 @@ services:
     env_file:
       - src/.env
 
+  tfl-nexus-demo:
+    build:
+      context: .
+      dockerfile: demo/dockerfile
+    image: tfl-nexus-demo
+    ports:
+      - "9003:9003"
+    env_file:
+      - demo/.env
+    depends_on:
+      - tfl-nexus-api
+
   tfl-nexus-db:
     image: postgres:latest
     env_file:

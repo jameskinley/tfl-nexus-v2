@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>TfL Assistant</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="container">
+
+      <header class="chat-header">
+        <div class="avatar" aria-hidden="true">🚇</div>
+        <div class="contact-info">
+          <h1>TfL Assistant</h1>
+          <p>Powered by MCP &middot; TfL Nexus</p>
+        </div>
+        <div class="status-dot" title="Online"></div>
+      </header>
+
+      <main class="thread" id="thread" role="log" aria-live="polite" aria-label="Conversation"></main>
+
+      <footer class="input-bar">
+        <div class="input-wrap">
+          <textarea
+            id="msg-input"
+            rows="1"
+            placeholder="Message TfL Assistant…"
+            autocomplete="off"
+            aria-label="Message input"
+          ></textarea>
+        </div>
+        <button id="send-btn" disabled aria-label="Send message">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5"/>
+            <polyline points="5 12 12 5 19 12"/>
+          </svg>
+        </button>
+      </footer>
+
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

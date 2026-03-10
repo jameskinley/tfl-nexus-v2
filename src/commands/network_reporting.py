@@ -196,7 +196,7 @@ class NetworkReportingCommand:
                             'station_name': c.station.name if c.station else 'Unknown',
                             'crowding_level': c.crowding_level,
                             'capacity_percentage': c.capacity_percentage,
-                            'timestamp': c.timestamp,
+                            'timestamp': c.timestamp.isoformat() if c.timestamp else None,
                             'time_slice': c.time_slice
                         }
                         for c in top_crowded

@@ -1,0 +1,18 @@
+FROM python:3.14-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN grep -vE '^pywin32' requirements.txt > requirements_linux.txt && \
+    pip install --no-cache-dir -r requirements_linux.txt
+
+COPY demo/ /app/
+
+EXPOSE 9003
+
+ENTRYPOINT ["python", "-u", "app.py"]
