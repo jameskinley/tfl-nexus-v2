@@ -31,7 +31,7 @@ jobs:
         run: mkdir -p wiki_output
 
       - name: Convert OpenAPI spec to Markdown
-        run: openapi-to-md docs/openapi.json > "wiki_output/REST API.md"
+        run: openapi-to-markdown --input_file docs/openapi.json --output_file "wiki_output/REST API.md"
 
       - name: Stage and rename docs
         run: |
