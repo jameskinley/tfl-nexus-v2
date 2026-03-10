@@ -1,0 +1,56 @@
+name: Publish Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/publish-wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-wiki:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install openapi-to-md
+        run: pip install openapi-to-md
+
+      - name: Prepare wiki staging area
+        run: mkdir -p wiki_output
+
+      - name: Convert OpenAPI spec to Markdown
+        run: openapi-to-md docs/openapi.json > "wiki_output/REST API.md"
+
+      - name: Stage and rename docs
+        run: |
+          for f in docs/*.md; do
+            base=$(basename "$f")
+            case "$base" in
+              mcp-docs.md)
+                cp "$f" "wiki_output/MCP Docs.md"
+                ;;
+              *)
+                cp "$f" "wiki_output/$base"
+                ;;
+            esac
+          done
+
+      - name: Publish Wiki
+        uses: Andrew-Chen-Wang/github-wiki-action@v4
+        with:
+          path: wiki_output
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
