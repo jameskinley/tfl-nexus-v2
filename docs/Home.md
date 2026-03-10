@@ -2,7 +2,9 @@
 
 ## API Documentation
 
-> **[📄 REST API Reference (PDF)](../../raw/main/docs/api-docs.pdf)** &nbsp;|&nbsp; **[[REST API]] (Wiki — generated from OpenAPI spec)**
+> **[📄 REST API Reference (PDF)](https://github.com/jameskinley/tfl-nexus-v2/blob/1fee3b5f8dbfa6e97a12d0b8dbacdbae145bfa6f/docs/api-docs.pdf)** &nbsp;|&nbsp; **[[REST API]] (Wiki — generated from OpenAPI spec)**
+>
+> **[📄 MCP Docs (PDF)](REPLACE_WITH_MCP_PDF_LINK)** &nbsp;|&nbsp; **[[MCP Docs]] (Wiki)**
 
 ---
 
@@ -47,7 +49,6 @@ python src/init_db.py          # initialise database
 python src/app.py              # start REST API + MCP server
 curl -X POST http://localhost:9000/route/ingest   # ingest TfL data (~5–10 min)
 ```
-
 ---
 
 ## Architecture
