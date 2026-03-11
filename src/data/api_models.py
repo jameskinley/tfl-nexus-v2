@@ -142,5 +142,9 @@ class ReportData(BaseModel):
 class CreateReportRequest(BaseModel):
     report_type: str = Field(default="snapshot", pattern="^(snapshot|daily_summary|incident)$")
 
+class UpdateReportRequest(BaseModel):
+    report_type: Optional[str] = Field(default=None, pattern="^(snapshot|daily_summary|incident)$")
+    regenerate_summary: bool = False
+
 class CreateDataImportRequest(BaseModel):
     full_refresh: bool = False

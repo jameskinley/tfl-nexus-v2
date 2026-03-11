@@ -6,6 +6,7 @@ from threading import Thread
 
 from app_provider import app
 from mcp_provider import mcp
+from security import ApiKeyMiddleware
 
 from commands.api_root import root_handler
 import adapters.reports_adapter
@@ -23,7 +24,12 @@ def main():
     host = os.getenv("APP_HOST", "0.0.0.0")
     port = int(os.getenv("APP_PORT", "9000"))
 
-    thread = Thread(target=lambda: mcp.run(transport="sse"), daemon=True)
+    def run_mcp():
+        mcp_app = mcp.sse_app()
+        mcp_app.add_middleware(ApiKeyMiddleware)
+        uvicorn.run(mcp_app, host=mcp.settings.host, port=mcp.settings.port, log_level="info")
+
+    thread = Thread(target=run_mcp, daemon=True)
     thread.start()
 
     uvicorn.run(app, host=host, port=port, log_level="info")

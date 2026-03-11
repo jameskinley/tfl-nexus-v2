@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Security
 from routers import *
 from tasks import lifespan
+from security import require_api_key, require_admin_key
 
 tags_metadata = [
     {
@@ -86,12 +87,13 @@ All data is sourced from the official Transport for London (TfL) Unified API.
     lifespan=lifespan
 )
 
-app.include_router(journeys)
-app.include_router(lines)
-app.include_router(stations)
-app.include_router(disruptions)
-app.include_router(reports)
-app.include_router(network)
-app.include_router(data_imports)
-app.include_router(system)
-app.include_router(modes)
+app.include_router(journeys,    dependencies=[Security(require_api_key)])
+app.include_router(lines,       dependencies=[Security(require_api_key)])
+app.include_router(stations,    dependencies=[Security(require_api_key)])
+app.include_router(disruptions, dependencies=[Security(require_api_key)])
+app.include_router(reports,     dependencies=[Security(require_api_key)])
+app.include_router(network,     dependencies=[Security(require_api_key)])
+app.include_router(data_imports,dependencies=[Security(require_api_key)])
+app.include_router(system)  # /health stays public
+app.include_router(modes,       dependencies=[Security(require_api_key)])
+app.include_router(keys,        dependencies=[Security(require_admin_key)])
