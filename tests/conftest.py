@@ -44,3 +44,45 @@ def seeded_db_session(db_session):
 
     db_session.commit()
     yield db_session
+
+
+# ── Security fixtures ─────────────────────────────────────────────────────────
+
+@pytest.fixture
+def admin_key_raw(db_session):
+    """Return the raw admin API key and persist the record to *db_session*."""
+    from security import create_api_key
+    raw, _ = create_api_key("test-admin", db_session, is_admin=True)
+    return raw
+
+
+@pytest.fixture
+def admin_key_record(db_session, admin_key_raw):
+    """Return the persisted ``APIKey`` record for the admin key."""
+    from security import verify_api_key
+    return verify_api_key(admin_key_raw, db_session)
+
+
+@pytest.fixture
+def regular_key_raw(db_session):
+    """Return the raw regular (non-admin) API key."""
+    from security import create_api_key
+    raw, _ = create_api_key("test-regular", db_session, is_admin=False)
+    return raw
+
+
+@pytest.fixture
+def regular_key_record(db_session, regular_key_raw):
+    """Return the persisted ``APIKey`` record for the regular key."""
+    from security import verify_api_key
+    return verify_api_key(regular_key_raw, db_session)
+
+
+@pytest.fixture
+def admin_headers(admin_key_raw):
+    return {"X-API-Key": admin_key_raw}
+
+
+@pytest.fixture
+def regular_headers(regular_key_raw):
+    return {"X-API-Key": regular_key_raw}

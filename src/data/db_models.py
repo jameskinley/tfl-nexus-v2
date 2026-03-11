@@ -257,3 +257,17 @@ class PollingMeta(Base):
     poll_type = Column(String, unique=True, nullable=False, index=True)
     last_poll_timestamp = Column(DateTime, nullable=False)
     poll_interval_seconds = Column(Integer, nullable=False)
+
+
+class APIKey(Base):
+    """API keys for authenticating access to the REST API and MCP server"""
+    __tablename__ = 'api_keys'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key_hash = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    request_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)

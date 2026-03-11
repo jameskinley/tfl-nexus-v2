@@ -6,7 +6,7 @@ from commands.network_reporting import NetworkReportingCommand
 from data.report_summarizer import get_summarizer
 from data.api_models import (
     ResourceResponse, CollectionResponse, ReportData,
-    CreateReportRequest, PaginationMeta
+    CreateReportRequest, UpdateReportRequest, PaginationMeta
 )
 from data.hateoas import HateoasBuilder
 from typing import Optional
@@ -179,6 +179,58 @@ async def get_report(
     except Exception as e:
         logger.error(f"Error fetching report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch report: {str(e)}")
+
+
+@router.put(
+    "/{report_id}",
+    response_model=ResourceResponse[ReportData],
+    summary="Update Report",
+    status_code=200
+)
+async def update_report(
+    request: UpdateReportRequest,
+    report_id: int = Path(..., description="Report ID"),
+    db: Session = Depends(get_db)
+) -> ResourceResponse[ReportData]:
+    try:
+        command = NetworkReportingCommand(db)
+        summarizer = _get_configured_summarizer() if request.regenerate_summary else None
+
+        report_dict = command.update_report(
+            report_id=report_id,
+            report_type=request.report_type,
+            regenerate_summary=request.regenerate_summary,
+            summarizer=summarizer
+        )
+
+        if not report_dict:
+            raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+
+        metadata = report_dict.get('metadata', {})
+        report_data = ReportData(
+            id=report_dict['id'],
+            timestamp=str(report_dict['timestamp']),
+            report_type=report_dict['report_type'],
+            summary=report_dict['summary'],
+            total_disruptions=metadata.get('total_disruptions', 0),
+            active_lines_count=metadata.get('active_lines_count', 0),
+            affected_lines_count=metadata.get('affected_lines_count', 0),
+            graph_connectivity_score=metadata.get('graph_connectivity_score'),
+            average_reliability_score=metadata.get('average_reliability_score')
+        )
+
+        self_href = f"/reports/{report_id}"
+        links = HateoasBuilder.build_links(self_href, method="PUT")
+
+        return ResourceResponse(data=report_data, links=links)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update report: {str(e)}")
 
 
 @router.delete(
