@@ -11,6 +11,15 @@ class TestDatabaseUrlDefault:
 
 
 class TestDatabaseUrlConstruction:
+    @pytest.fixture(autouse=True)
+    def _restore_db_module(self):
+        """Reload data.database after each test to undo any module-level state
+        changes caused by in-test reloads.  monkeypatch has already restored
+        env vars by the time this teardown runs (LIFO fixture ordering), so
+        the reload always produces a clean SQLite-backed module."""
+        yield
+        importlib.reload(importlib.import_module("data.database"))
+
     def test_database_url_env_var_used_verbatim(self, monkeypatch):
         monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host/db")
         monkeypatch.delenv("DB_HOST", raising=False)
@@ -57,6 +66,7 @@ class TestDatabaseUrlConstruction:
         assert "sqlite" in url_used.lower()
 
     def test_cleanup_restores_sqlite_module(self, monkeypatch):
+        """Verify the module returns to SQLite config after env vars are cleared."""
         import data.database as db_module
         importlib.reload(db_module)
 

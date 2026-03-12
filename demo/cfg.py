@@ -8,6 +8,7 @@ BASE_URL = os.getenv("BASE_URL", "https://openrouter.ai/api/v1")
 API_KEY = os.getenv("API_KEY", "")
 MODEL = os.getenv("MODEL", "openai/gpt-oss-20b:free")
 MCP_SSE_URL = os.getenv("MCP_SSE_URL", "http://tfl-nexus-api:9002/sse")
+TFL_NEXUS_API_KEY = os.getenv("TFL_NEXUS_API_KEY", "")
 
 logger = getLogger(__name__)
 

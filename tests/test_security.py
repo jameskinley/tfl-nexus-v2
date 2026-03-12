@@ -134,6 +134,7 @@ def _make_test_app(sec_engine) -> tuple[FastAPI, TestClient]:
     """
     from fastapi import Depends, Security
     from data.database import get_db
+    import security as _security_module
 
     app = FastAPI()
 
@@ -144,7 +145,13 @@ def _make_test_app(sec_engine) -> tuple[FastAPI, TestClient]:
         finally:
             db.close()
 
+    # Override the get_db reference currently in data.database (for isolated runs)
+    # AND the reference that security.py captured at import time via
+    # `from data.database import get_db`.  These diverge when test_database.py
+    # reloads data.database, creating a new function object; require_api_key's
+    # Depends() still holds the original one stored in security.get_db.
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[_security_module.get_db] = override_get_db
 
     @app.get("/protected")
     async def protected(key: APIKey = Depends(require_api_key)):

@@ -7,9 +7,9 @@ from mcp.client.sse import sse_client
 from openai import AsyncOpenAI
 
 try:
-    from .cfg import BASE_URL, API_KEY, MODEL, MCP_SSE_URL
+    from .cfg import BASE_URL, API_KEY, MODEL, MCP_SSE_URL, TFL_NEXUS_API_KEY
 except ImportError:
-    from cfg import BASE_URL, API_KEY, MODEL, MCP_SSE_URL
+    from cfg import BASE_URL, API_KEY, MODEL, MCP_SSE_URL, TFL_NEXUS_API_KEY
 
 
 class Chat:
@@ -25,7 +25,9 @@ class Chat:
         """Lazily connect to the MCP server over SSE."""
         if self._session is not None:
             return
-        transport = await self._exit_stack.enter_async_context(sse_client(MCP_SSE_URL))
+        transport = await self._exit_stack.enter_async_context(
+            sse_client(MCP_SSE_URL, headers={"X-API-Key": TFL_NEXUS_API_KEY})
+        )
         read, write = transport
         self._session = await self._exit_stack.enter_async_context(
             ClientSession(read, write)
